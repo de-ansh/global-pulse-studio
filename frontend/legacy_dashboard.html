@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Global Pulse Studio — Geopolitical Video Research Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#22c55e',
+              600: '#16a34a',
+            },
+            accent: {
+              red: '#ef4444',
+              amber: '#f59e0b',
+              blue: '#3b82f6',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #090a0f;
+      color: #e2e8f0;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-[#090a0f] text-slate-200">
+
+  <!-- Top Navigation Bar -->
+  <header class="border-b border-slate-800 bg-[#0d1117]/80 backdrop-blur sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between">
+    <div class="flex items-center space-x-4">
+      <div class="flex items-center space-x-2.5">
+        <div class="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-black text-lg">
+          GP
+        </div>
+        <div>
+          <h1 class="text-sm font-bold tracking-tight text-white flex items-center gap-2">
+            GLOBAL PULSE STUDIO
+            <span class="text-[10px] font-mono uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">v0.1-alpha</span>
+          </h1>
+          <p class="text-[11px] text-slate-400">Intelligence & Narrative Studio for Video Essayists</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="hidden md:flex items-center space-x-1 pl-8">
+        <button onclick="switchTab('radar')" id="tab-btn-radar" class="tab-btn px-3 py-1.5 rounded-md text-xs font-semibold bg-slate-800 text-white transition">
+          Event Radar
+        </button>
+        <button onclick="switchTab('warroom')" id="tab-btn-warroom" class="tab-btn px-3 py-1.5 rounded-md text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800/50 transition">
+          War Room (Dossier)
+        </button>
+        <button onclick="switchTab('studio')" id="tab-btn-studio" class="tab-btn px-3 py-1.5 rounded-md text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800/50 transition">
+          Story Studio
+        </button>
+        <button onclick="switchTab('sources')" id="tab-btn-sources" class="tab-btn px-3 py-1.5 rounded-md text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800/50 transition">
+          Feeds & Feeds
+        </button>
+      </nav>
+    </div>
+
+    <div class="flex items-center space-x-3">
+      <div id="status-badge" class="flex items-center space-x-2 text-xs font-mono text-slate-400 bg-slate-900 px-3 py-1.5 rounded-md border border-slate-800">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>ONLINE</span>
+      </div>
+      <button onclick="triggerScan()" id="btn-scan" class="px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm flex items-center gap-1.5 transition active:scale-95">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        <span>Crawl Signals</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main View Area -->
+  <main class="flex-1 p-6 max-w-7xl mx-auto w-full">
+
+    <!-- VIEW 1: EVENT RADAR -->
+    <section id="view-radar" class="view-panel space-y-6">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-2 border-b border-slate-800">
+        <div>
+          <h2 class="text-lg font-bold text-white tracking-tight">Global Signals & Event Clusters</h2>
+          <p class="text-xs text-slate-400">Ranked by video explainer yield, chokepoint friction, and geopolitical severity.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="filter-severity" onchange="loadClusters()" class="bg-slate-900 border border-slate-800 rounded-md text-xs px-2.5 py-1.5 text-slate-300 focus:outline-none focus:border-slate-700">
+            <option value="">All Severities</option>
+            <option value="crisis">Crisis Only</option>
+            <option value="escalating">Escalating</option>
+            <option value="routine">Routine</option>
+          </select>
+          <input type="number" id="filter-score" onchange="loadClusters()" placeholder="Min Score (e.g. 50)" class="w-32 bg-slate-900 border border-slate-800 rounded-md text-xs px-2.5 py-1.5 text-slate-300 focus:outline-none focus:border-slate-700">
+        </div>
+      </div>
+
+      <!-- Clusters Grid -->
+      <div id="clusters-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Rendered dynamically -->
+        <div class="p-8 text-center text-slate-500 col-span-full border border-dashed border-slate-800 rounded-xl">
+          Loading intelligence radar...
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 2: WAR ROOM (DOSSIER) -->
+    <section id="view-warroom" class="view-panel hidden space-y-6">
+      <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+        <div>
+          <span class="text-[10px] font-mono uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded">Active Project Dossier</span>
+          <h2 id="warroom-title" class="text-xl font-bold text-white mt-1">Select or Create a Project to View Dossier</h2>
+          <p id="warroom-slug" class="text-xs font-mono text-slate-400">Slug: None</p>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button onclick="refreshActiveDossier()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded text-slate-200 transition">
+            Regenerate Dossier
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Timeline Column (2 cols) -->
+        <div class="lg:col-span-2 space-y-4">
+          <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-5">
+            <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2 mb-4">
+              <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              Chronological Escalation Timeline
+            </h3>
+            <div id="dossier-timeline" class="space-y-3 font-sans text-xs">
+              <p class="text-slate-500 italic">No timeline events compiled yet.</p>
+            </div>
+          </div>
+
+          <!-- Contradictions & Bias Cross-Reference -->
+          <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-5">
+            <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2 mb-4">
+              <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+              Contradiction & Counter-Narrative Radar
+            </h3>
+            <div id="dossier-contradictions" class="space-y-3 text-xs">
+              <p class="text-slate-500 italic">No contradiction data yet.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar: Stakeholders & Strategic Geography -->
+        <div class="space-y-4">
+          <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-5">
+            <h3 class="text-sm font-bold text-slate-200 mb-3">Key Stakeholders & Motives</h3>
+            <div id="dossier-stakeholders" class="space-y-2 text-xs">
+              <p class="text-slate-500 italic">No stakeholders extracted.</p>
+            </div>
+          </div>
+
+          <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-5">
+            <h3 class="text-sm font-bold text-slate-200 mb-3">Geographic Chokepoints</h3>
+            <div id="dossier-geography" class="space-y-2 text-xs">
+              <p class="text-slate-500 italic">No chokepoint data.</p>
+            </div>
+          </div>
+
+          <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-5">
+            <h3 class="text-sm font-bold text-slate-200 mb-3">Verified Citations</h3>
+            <div id="dossier-citations" class="space-y-1.5 text-xs font-mono text-slate-400 max-h-48 overflow-y-auto custom-scrollbar">
+              <p class="text-slate-500 italic">No citations attached.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 3: STORY STUDIO -->
+    <section id="view-studio" class="view-panel hidden space-y-6">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-2 border-b border-slate-800">
+        <div>
+          <span class="text-[10px] font-mono uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded">Story Studio</span>
+          <h2 id="studio-project-title" class="text-xl font-bold text-white mt-1">Video Essay Narrative Engine</h2>
+          <p class="text-xs text-slate-400">Generate hooks, select high-yield thematic angles, and build 5-act documentary structures.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="generateAnglesForActiveProject()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded text-slate-200 transition">
+            Generate Angles
+          </button>
+          <button onclick="generateOutlineForActiveProject()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold rounded text-white transition">
+            Generate 5-Act Script
+          </button>
+          <button onclick="exportMarkdownBrief()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-semibold rounded text-white transition">
+            Export Markdown Brief
+          </button>
+        </div>
+      </div>
+
+      <!-- Narrative Angles Selection -->
+      <div>
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">1. Select Narrative Angle</h3>
+        <div id="angles-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <p class="text-xs text-slate-500 italic col-span-full">Click "Generate Angles" to create tailored narrative approaches.</p>
+        </div>
+      </div>
+
+      <!-- Hook Variants -->
+      <div>
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">2. Video Opening Hook Options</h3>
+        <div id="hooks-container" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <p class="text-xs text-slate-500 italic col-span-full">Generate a script outline to populate video hooks.</p>
+        </div>
+      </div>
+
+      <!-- 5-Act Structure -->
+      <div>
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">3. 5-Act Documentary Essay Structure</h3>
+        <div id="acts-container" class="space-y-3">
+          <p class="text-xs text-slate-500 italic">No script outline generated yet.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 4: FEEDS & SOURCES -->
+    <section id="view-sources" class="view-panel hidden space-y-6">
+      <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+        <div>
+          <h2 class="text-lg font-bold text-white tracking-tight">Intelligence Feeds Catalog</h2>
+          <p class="text-xs text-slate-400">Authoritative global wires, think tanks, and policy publications monitored by the radar.</p>
+        </div>
+        <button onclick="seedDefaults()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded text-slate-200 transition">
+          Seed Default Feeds
+        </button>
+      </div>
+
+      <div class="bg-slate-900/40 border border-slate-800 rounded-xl overflow-hidden">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-900 border-b border-slate-800 text-slate-400 font-mono">
+            <tr>
+              <th class="p-3.5">Source Name</th>
+              <th class="p-3.5">Type</th>
+              <th class="p-3.5">Region</th>
+              <th class="p-3.5">Reliability</th>
+              <th class="p-3.5">Feed URL</th>
+              <th class="p-3.5">Last Ingest</th>
+            </tr>
+          </thead>
+          <tbody id="sources-table-body" class="divide-y divide-slate-800/60 font-sans">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // State management
+    let activeProjectId = null;
+    let activeProjectData = null;
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-slate-800', 'text-white');
+        btn.classList.add('text-slate-400');
+      });
+      document.querySelectorAll('.view-panel').forEach(panel => {
+        panel.classList.add('hidden');
+      });
+
+      const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+      const activePanel = document.getElementById(`view-${tabName}`);
+      if (activeBtn && activePanel) {
+        activeBtn.classList.add('bg-slate-800', 'text-white');
+        activeBtn.classList.remove('text-slate-400');
+        activePanel.classList.remove('hidden');
+      }
+
+      if (tabName === 'radar') loadClusters();
+      if (tabName === 'sources') loadSources();
+      if (tabName === 'warroom' && activeProjectId) loadActiveProject();
+      if (tabName === 'studio' && activeProjectId) loadActiveProject();
+    }
+
+    async function triggerScan() {
+      const btn = document.getElementById('btn-scan');
+      const orig = btn.innerHTML;
+      btn.innerHTML = `<span class="animate-spin text-xs">↻</span> Scanning Feeds...`;
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/radar/scan', { method: 'POST' });
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`HTTP ${res.status}: ${errText}`);
+        }
+        const data = await res.json();
+        alert(`Scan Complete!\nIngested: ${data.new_articles_ingested} new articles\nDuplicates skipped: ${data.duplicate_articles_skipped}\nClusters updated: ${data.clusters_created_or_updated}`);
+        loadClusters();
+      } catch (err) {
+        alert('Scan failed: ' + err.message);
+      } finally {
+        btn.innerHTML = orig;
+        btn.disabled = false;
+      }
+    }
+
+    async function loadClusters() {
+      const severity = document.getElementById('filter-severity')?.value || '';
+      const minScore = document.getElementById('filter-score')?.value || '';
+      let url = '/api/radar/clusters?limit=50';
+      if (severity) url += `&severity=${severity}`;
+      if (minScore) url += `&min_score=${minScore}`;
+
+      try {
+        const res = await fetch(url);
+        const clusters = await res.json();
+        const container = document.getElementById('clusters-container');
+
+        if (!clusters || clusters.length === 0) {
+          container.innerHTML = `
+            <div class="p-8 text-center text-slate-500 col-span-full border border-dashed border-slate-800 rounded-xl">
+              No active clusters detected yet. Click "Crawl Signals" or "Seed Default Feeds" to populate intelligence.
+            </div>`;
+          return;
+        }
+
+        container.innerHTML = clusters.map(c => {
+          const sevClass = c.severity === 'crisis' 
+            ? 'bg-red-500/10 text-red-400 border-red-500/20' 
+            : (c.severity === 'escalating' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-800 text-slate-400 border-slate-700');
+
+          return `
+            <div class="bg-slate-900/60 border border-slate-800 hover:border-slate-700 p-5 rounded-xl flex flex-col justify-between transition group">
+              <div>
+                <div class="flex items-center justify-between gap-2 mb-2">
+                  <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded border ${sevClass}">${c.severity}</span>
+                  <div class="flex items-center space-x-1.5 font-mono text-xs">
+                    <span class="text-slate-400">Explainer Score:</span>
+                    <span class="font-bold text-emerald-400">${c.explainer_score}</span>
+                  </div>
+                </div>
+
+                <h3 class="text-sm font-bold text-white group-hover:text-emerald-300 transition line-clamp-2">${c.headline}</h3>
+                <p class="text-xs text-slate-400 mt-2 line-clamp-3">${c.summary || 'Multiple wire and think tank dispatches analyzing strategic movements.'}</p>
+
+                <div class="mt-3 flex flex-wrap gap-1.5">
+                  ${(c.chokepoints || []).map(cp => `<span class="text-[10px] bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded font-mono">📍 ${cp}</span>`).join('')}
+                  ${(c.key_actors || []).map(a => `<span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">${a}</span>`).join('')}
+                </div>
+              </div>
+
+              <div class="pt-4 mt-4 border-t border-slate-800/60 flex items-center justify-between">
+                <span class="text-[11px] text-slate-500 font-mono">${c.article_count} sources</span>
+                <button onclick="createProjectFromCluster('${c.id}', '${encodeURIComponent(c.headline)}')" class="text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white px-3 py-1.5 rounded transition">
+                  Create Video Project →
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function createProjectFromCluster(clusterId, encodedHeadline) {
+      const title = decodeURIComponent(encodedHeadline);
+      try {
+        const res = await fetch('/api/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: title,
+            cluster_id: clusterId,
+            target_duration_mins: 15
+          })
+        });
+        const proj = await res.json();
+        activeProjectId = proj.id;
+        alert(`Video Project Workspace Created: "${proj.title}"`);
+        // Trigger initial dossier and outline build
+        await fetch(`/api/projects/${proj.id}/dossier/generate`, { method: 'POST' });
+        await fetch(`/api/projects/${proj.id}/outline/generate`, { method: 'POST' });
+        switchTab('warroom');
+      } catch (err) {
+        alert('Failed creating project: ' + err.message);
+      }
+    }
+
+    async function loadActiveProject() {
+      if (!activeProjectId) return;
+      try {
+        const res = await fetch(`/api/projects/${activeProjectId}`);
+        activeProjectData = await res.json();
+
+        // Update War Room UI
+        document.getElementById('warroom-title').innerText = activeProjectData.title;
+        document.getElementById('warroom-slug').innerText = `Slug: ${activeProjectData.working_slug} | Target: ${activeProjectData.target_duration_mins}m`;
+
+        // Populate Timeline
+        const tContainer = document.getElementById('dossier-timeline');
+        if (activeProjectData.dossier?.timeline_events?.length > 0) {
+          tContainer.innerHTML = activeProjectData.dossier.timeline_events.map(ev => `
+            <div class="border-l-2 border-emerald-500/40 pl-3 py-1">
+              <span class="text-[10px] font-mono text-emerald-400">${ev.date || 'Recent'}</span>
+              <p class="font-medium text-slate-200">${ev.event}</p>
+              ${ev.url ? `<a href="${ev.url}" target="_blank" class="text-[10px] text-blue-400 hover:underline">Source Link ↗</a>` : ''}
+            </div>
+          `).join('');
+        }
+
+        // Populate Stakeholders
+        const sContainer = document.getElementById('dossier-stakeholders');
+        if (activeProjectData.dossier?.stakeholders?.length > 0) {
+          sContainer.innerHTML = activeProjectData.dossier.stakeholders.map(s => `
+            <div class="bg-slate-900 border border-slate-800 p-2.5 rounded">
+              <div class="font-bold text-slate-200">${s.actor}</div>
+              <div class="text-[11px] text-slate-400">${s.role} — ${s.strategic_priority}</div>
+            </div>
+          `).join('');
+        }
+
+        // Populate Contradictions
+        const cContainer = document.getElementById('dossier-contradictions');
+        if (activeProjectData.dossier?.contradictions?.length > 0) {
+          cContainer.innerHTML = activeProjectData.dossier.contradictions.map(c => `
+            <div class="bg-slate-900 border border-slate-800 p-3 rounded space-y-1">
+              <span class="font-bold text-amber-300">${c.issue}</span>
+              <p class="text-slate-300"><strong>Perspective A:</strong> ${c.side_a}</p>
+              <p class="text-slate-400"><strong>Counter-Perspective B:</strong> ${c.side_b}</p>
+            </div>
+          `).join('');
+        }
+
+        // Populate Citations
+        const citeContainer = document.getElementById('dossier-citations');
+        if (activeProjectData.dossier?.citations?.length > 0) {
+          citeContainer.innerHTML = activeProjectData.dossier.citations.map(c => `
+            <div>• <a href="${c.url}" target="_blank" class="hover:underline text-slate-300">${c.title}</a></div>
+          `).join('');
+        }
+
+        // Update Story Studio UI
+        document.getElementById('studio-project-title').innerText = activeProjectData.title;
+
+        // Populate Hooks
+        const hContainer = document.getElementById('hooks-container');
+        if (activeProjectData.script_outline?.hook_variants?.length > 0) {
+          hContainer.innerHTML = activeProjectData.script_outline.hook_variants.map(h => `
+            <div class="bg-slate-900/60 border border-slate-800 p-4 rounded-xl space-y-2">
+              <span class="text-[10px] font-mono uppercase bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">${h.type}</span>
+              <p class="text-xs text-slate-200 font-medium">"${h.hook_text}"</p>
+              <p class="text-[11px] text-slate-400 italic">Visual: ${h.suggested_broll}</p>
+            </div>
+          `).join('');
+        }
+
+        // Populate Acts
+        const actsContainer = document.getElementById('acts-container');
+        if (activeProjectData.script_outline?.acts?.length > 0) {
+          actsContainer.innerHTML = activeProjectData.script_outline.acts.map(a => `
+            <div class="bg-slate-900/50 border border-slate-800 p-4 rounded-xl space-y-2">
+              <div class="flex justify-between items-center">
+                <h4 class="font-bold text-white text-sm">${a.title}</h4>
+                <span class="font-mono text-xs text-emerald-400">${a.timecode}</span>
+              </div>
+              <p class="text-xs text-slate-300">${a.narrative_focus}</p>
+              <div class="text-[11px] text-slate-400 bg-slate-950 p-2.5 rounded border border-slate-800/80 space-y-1">
+                <span class="font-bold text-slate-300">Key Questions:</span>
+                ${(a.key_questions || []).map(q => `<div>• ${q}</div>`).join('')}
+              </div>
+              <div class="text-[11px] text-blue-300/80">
+                <span class="font-bold">B-Roll & Graphics:</span> ${(a.b_roll_and_visual_cues || []).join(' | ')}
+              </div>
+            </div>
+          `).join('');
+        }
+
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function refreshActiveDossier() {
+      if (!activeProjectId) return;
+      await fetch(`/api/projects/${activeProjectId}/dossier/generate`, { method: 'POST' });
+      loadActiveProject();
+    }
+
+    async function generateAnglesForActiveProject() {
+      if (!activeProjectId) {
+        alert('Please create or select a project from the Event Radar tab first.');
+        return;
+      }
+      try {
+        const res = await fetch(`/api/projects/${activeProjectId}/angles`, { method: 'POST' });
+        const angles = await res.json();
+        const container = document.getElementById('angles-container');
+        container.innerHTML = angles.map(a => `
+          <div class="bg-slate-900/70 border border-slate-800 hover:border-emerald-500/50 p-4 rounded-xl flex flex-col justify-between transition cursor-pointer" onclick="selectAngle('${a.angle_type}')">
+            <div>
+              <span class="text-[10px] font-mono uppercase bg-slate-800 text-slate-300 px-2 py-0.5 rounded">${a.angle_type}</span>
+              <h4 class="text-sm font-bold text-white mt-2">${a.title}</h4>
+              <p class="text-xs text-slate-400 mt-1">${a.thesis}</p>
+            </div>
+            <div class="mt-3 pt-2 border-t border-slate-800 text-[10px] font-mono text-emerald-400">
+              Select this angle →
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function selectAngle(angleType) {
+      if (!activeProjectId) return;
+      await fetch(`/api/projects/${activeProjectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selected_angle: angleType })
+      });
+      alert(`Angle "${angleType}" selected. Rebuilding outline...`);
+      await fetch(`/api/projects/${activeProjectId}/outline/generate`, { method: 'POST' });
+      loadActiveProject();
+    }
+
+    async function generateOutlineForActiveProject() {
+      if (!activeProjectId) return;
+      await fetch(`/api/projects/${activeProjectId}/outline/generate`, { method: 'POST' });
+      loadActiveProject();
+    }
+
+    async function exportMarkdownBrief() {
+      if (!activeProjectId) return;
+      const res = await fetch(`/api/projects/${activeProjectId}/export`);
+      const text = await res.text();
+      const blob = new Blob([text], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${activeProjectData.working_slug || 'project'}-brief.md`;
+      a.click();
+    }
+
+    async function loadSources() {
+      try {
+        const res = await fetch('/api/radar/sources');
+        const sources = await res.json();
+        const tbody = document.getElementById('sources-table-body');
+        tbody.innerHTML = sources.map(s => `
+          <tr class="hover:bg-slate-900/50">
+            <td class="p-3.5 font-bold text-white">${s.name}</td>
+            <td class="p-3.5 font-mono text-slate-400">${s.source_type}</td>
+            <td class="p-3.5 text-slate-300">${s.region}</td>
+            <td class="p-3.5 font-mono text-emerald-400">${s.reliability_score * 100}%</td>
+            <td class="p-3.5 font-mono text-slate-400 truncate max-w-xs">${s.feed_url}</td>
+            <td class="p-3.5 text-slate-400">${s.last_fetched_at ? new Date(s.last_fetched_at).toLocaleTimeString() : 'Never'}</td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function seedDefaults() {
+      await fetch('/api/radar/sources/seed', { method: 'POST' });
+      loadSources();
+    }
+
+    // Auto-seed and load radar on launch
+    (async () => {
+      try {
+        await fetch('/api/radar/sources/seed', { method: 'POST' });
+      } catch (_) {}
+      loadClusters();
+    })();
+  </script>
+</body>
+</html>
