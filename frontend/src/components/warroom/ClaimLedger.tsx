@@ -187,6 +187,17 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
                       <ExternalLink className="w-3 h-3 shrink-0" />
                       <span className="truncate min-w-0">{ev.label || ev.url}</span>
                     </a>
+                    {ev.archive_url && (
+                      <a
+                        href={ev.archive_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Open Wayback Machine archive permalink"
+                        className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-slate-400 hover:text-cyan-300 border border-slate-700/60 shrink-0"
+                      >
+                        archive
+                      </a>
+                    )}
                     <button
                       onClick={() => removeEvidence(claim, i)}
                       className="text-slate-500 hover:text-rose-400"

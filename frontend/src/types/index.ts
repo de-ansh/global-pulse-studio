@@ -137,6 +137,7 @@ export interface ClaimCheck extends SupportResult {
   created_at: string;
 }
 
+
 export interface ScanSummary {
   sources_scanned: number;
   new_articles_ingested: number;
@@ -290,3 +291,49 @@ export interface NarrationScript {
   model: string;
   created_at: string;
 }
+
+export interface ReadinessChecklistItem {
+  id: string;
+  label: string;
+  passed: boolean;
+  detail: string;
+}
+
+export interface ProjectReadiness {
+  project_id: string;
+  score: number;
+  status: 'ready' | 'needs_review' | 'unverified' | string;
+  total_claims: number;
+  confirmed_claims: number;
+  unverified_claims: number;
+  disputed_claims: number;
+  false_claims: number;
+  total_sources: number;
+  independent_origins: number;
+  script_support_checked: boolean;
+  script_verdict_summary: Record<string, number>;
+  checklist: ReadinessChecklistItem[];
+  warnings: string[];
+}
+
+export interface SourceSheetCitation {
+  type: string;
+  id: string;
+  text: string;
+  status: string;
+  evidence_urls: string[];
+  archive_urls: string[];
+  verbatim_quotes: string[];
+  outlet?: string | null;
+}
+
+export interface ProjectSourceSheet {
+  project_id: string;
+  title: string;
+  generated_at: string;
+  readiness_score: number;
+  citations: SourceSheetCitation[];
+  sources: any[];
+  markdown: string;
+}
+

@@ -356,6 +356,7 @@ export const StoryStudio: React.FC<StoryStudioProps> = ({
       <ExportModal
         markdown={exportMarkdown}
         projectTitle={project.title}
+        projectId={project.id}
         onClose={() => setExportMarkdown(null)}
       />
     </div>

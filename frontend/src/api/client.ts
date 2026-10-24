@@ -13,6 +13,8 @@ import {
   Claim,
   ClaimEvidence,
   ClaimStatus,
+  ProjectReadiness,
+  ProjectSourceSheet,
 } from '../types';
 
 const API_BASE = '/api';
@@ -292,5 +294,15 @@ export const api = {
       throw new Error(`Export failed: [${res.status}] ${res.statusText}`);
     }
     return res.text();
+  },
+
+  async getProjectReadiness(projectId: string): Promise<ProjectReadiness> {
+    const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/readiness`);
+    return handleResponse<ProjectReadiness>(res);
+  },
+
+  async getSourceSheet(projectId: string): Promise<ProjectSourceSheet> {
+    const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/source-sheet`);
+    return handleResponse<ProjectSourceSheet>(res);
   },
 };

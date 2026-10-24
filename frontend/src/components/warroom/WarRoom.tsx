@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
-import { Project, Dossier } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { Project, Dossier, ProjectReadiness } from '../../types';
+import { api } from '../../api/client';
 import { ClaimLedger } from './ClaimLedger';
 import { AI_DISABLED_HINT, useFeatures } from '../../features';
 import {
   ShieldAlert,
+  ShieldCheck,
+  CheckCircle2,
+  XCircle,
   Clock,
   MapPin,
   Scale,
@@ -14,7 +18,9 @@ import {
   Users,
   Compass,
   AlertTriangle,
-  FolderOpen
+  FolderOpen,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 interface WarRoomProps {
@@ -41,6 +47,13 @@ export const WarRoom: React.FC<WarRoomProps> = ({
   const [selectedDuration, setSelectedDuration] = useState<number>(
     project?.target_duration_mins || 18
   );
+  const [readiness, setReadiness] = useState<ProjectReadiness | null>(null);
+  const [showChecklist, setShowChecklist] = useState(false);
+
+  useEffect(() => {
+    if (!project?.id) return;
+    api.getProjectReadiness(project.id).then(setReadiness).catch(() => {});
+  }, [project?.id, isRefreshing]);
 
   const features = useFeatures(); // before the early return: hooks must run on every render
 
@@ -127,6 +140,96 @@ export const WarRoom: React.FC<WarRoomProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Audit Readiness HUD Banner */}
+      {readiness && (
+        <div className="p-4 rounded-2xl bg-slate-900/50 border border-slate-800/80 shadow-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div
+                className={`flex items-center justify-center w-11 h-11 rounded-xl font-mono text-sm font-bold border ${
+                  readiness.score >= 80
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40'
+                    : readiness.score >= 50
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/40'
+                    : 'bg-rose-500/10 text-rose-400 border-rose-500/40'
+                }`}
+                title="Audit Readiness Score (0-100)"
+              >
+                {readiness.score}%
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-display font-semibold text-sm text-slate-200">
+                    Fact-Check & Audit Readiness
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase border ${
+                      readiness.status === 'ready'
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                        : readiness.status === 'needs_review'
+                        ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                        : 'bg-slate-800 text-slate-400 border-slate-700'
+                    }`}
+                  >
+                    {readiness.status.replace('_', ' ')}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5 font-mono">
+                  {readiness.confirmed_claims}/{readiness.total_claims} claims confirmed · {readiness.independent_origins} independent origin(s) ·{' '}
+                  {readiness.warnings.length === 0 ? 'No editorial flags' : `${readiness.warnings.length} warning(s)`}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowChecklist(!showChecklist)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono text-slate-400 hover:text-slate-200 bg-slate-950/60 border border-slate-800 transition"
+            >
+              <span>{showChecklist ? 'Hide Checklist' : 'View Checklist'}</span>
+              {showChecklist ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+
+          {/* Expandable Checklist Details */}
+          {showChecklist && (
+            <div className="mt-4 pt-4 border-t border-slate-800/80 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {readiness.checklist.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-3 rounded-xl bg-slate-950/40 border border-slate-800/60 flex items-start gap-2.5"
+                  >
+                    {item.passed ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    )}
+                    <div className="text-xs">
+                      <div className="font-semibold text-slate-300">{item.label}</div>
+                      <div className="text-slate-400 text-[11px] mt-0.5">{item.detail}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {readiness.warnings.length > 0 && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 space-y-1">
+                  <div className="font-semibold flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Editorial Warnings Before Script Lock:</span>
+                  </div>
+                  <ul className="list-disc list-inside space-y-0.5 text-[11px] text-amber-300/80 pl-1">
+                    {readiness.warnings.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Dossier Modules Grid */}
       {!dossier ? (

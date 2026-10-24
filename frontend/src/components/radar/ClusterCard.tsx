@@ -1,6 +1,6 @@
 import React from 'react';
 import { EventCluster } from '../../types';
-import { Anchor, Users, Compass, ArrowRight, Layers, Clock } from 'lucide-react';
+import { Anchor, Users, Compass, ArrowRight, Layers, Clock, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 interface ClusterCardProps {
   cluster: EventCluster;
@@ -48,6 +48,22 @@ export const ClusterCard: React.FC<ClusterCardProps> = ({
               <Layers className="w-3 h-3 text-cyan-400" />
               <span>{cluster.article_count} {cluster.article_count === 1 ? 'report' : 'reports'}</span>
             </span>
+            {cluster.triangulation_level === 'triangulated' ? (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-medium" title="Triangulated across 3+ independent news origins">
+                <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                <span>Triangulated</span>
+              </span>
+            ) : cluster.triangulation_level === 'corroborated' ? (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-medium" title="Corroborated across 2+ independent origins">
+                <ShieldCheck className="w-3 h-3 text-cyan-400" />
+                <span>Corroborated</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/30 font-medium" title="Single source origin - corroborate before recording">
+                <AlertTriangle className="w-3 h-3 text-amber-400" />
+                <span>Single Source</span>
+              </span>
+            )}
           </div>
 
           {/* Explainer Score HUD Tag */}
