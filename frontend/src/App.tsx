@@ -9,7 +9,7 @@ import { Toast, ToastMessage } from './components/Toast';
 import { EventCluster, Project, Source, SourceCreate } from './types';
 import { api } from './api/client';
 
-const TABS: ActiveTab[] = ['radar', 'india', 'warroom', 'studio', 'sources'];
+const TABS: ActiveTab[] = ['radar', 'warroom', 'studio', 'sources']; // old #/india links fall back to Discover
 const CLUSTER_PAGE = 50;
 
 // URL hash mirrors the view (#/warroom/proj_123) so refresh, bookmarks and back/forward work.
@@ -38,6 +38,7 @@ export const App: React.FC = () => {
   const [isFindingContradictions, setIsFindingContradictions] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [indiaFocus, setIndiaFocus] = useState(false);
 
   const addToast = (type: 'success' | 'error' | 'info', title: string, description?: string) => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -161,8 +162,8 @@ export const App: React.FC = () => {
       const summary = await api.scanFeeds();
       addToast(
         'success',
-        'Intelligence Scan Completed',
-        `Ingested: ${summary.new_articles_ingested} new • Skipped: ${summary.duplicate_articles_skipped} • Clusters: ${summary.clusters_created_or_updated}`
+        'News Fetched',
+        `${summary.new_articles_ingested} new articles, ${summary.clusters_created_or_updated} stories updated.`
       );
       await fetchClusters();
       await fetchSources();
@@ -192,7 +193,7 @@ export const App: React.FC = () => {
     if (existing) {
       setActiveProjectId(existing.id);
       setActiveTab('warroom');
-      addToast('info', 'Project Reopened', `"${existing.title}" already tracks this event.`);
+      addToast('info', 'Project Reopened', `You already have a project on "${existing.title}".`);
       return;
     }
     setIsCreatingProject(true);
@@ -204,7 +205,7 @@ export const App: React.FC = () => {
       });
       await fetchProjects(newProj.id);
       setActiveTab('warroom');
-      addToast('success', 'Project Initialized', `"${newProj.title}" opened in War Room.`);
+      addToast('success', 'Project Created', `Now researching "${newProj.title}".`);
     } catch (err: any) {
       console.error('Failed to create project:', err);
       addToast('error', 'Creation Failed', err.message);
@@ -224,7 +225,7 @@ export const App: React.FC = () => {
       });
       await fetchProjects(newProj.id);
       setActiveTab('warroom');
-      addToast('success', 'Project Created', `Workspace initialized for "${newProj.title}".`);
+      addToast('success', 'Project Created', `Now researching "${newProj.title}".`);
     } catch (err: any) {
       console.error('Failed to create project:', err);
       addToast('error', 'Creation Failed', err.message);
@@ -238,7 +239,7 @@ export const App: React.FC = () => {
       await api.generateDossier(activeProject.id);
       const updated = await api.getProject(activeProject.id);
       setActiveProject(updated);
-      addToast('success', 'Dossier Synthesized', 'Timeline, geography & framing comparison updated.');
+      addToast('success', 'Research Updated', 'Timeline, stakeholders and sources refreshed.');
     } catch (err: any) {
       console.error('Failed to refresh dossier:', err);
       addToast('error', 'Dossier Synthesis Failed', err.message);
@@ -274,7 +275,7 @@ export const App: React.FC = () => {
       await api.generateOutline(activeProject.id);
       const updated = await api.getProject(activeProject.id);
       setActiveProject(updated);
-      addToast('success', '5 Acts Generated', 'Pacing and B-roll visual cues synthesized.');
+      addToast('success', 'Outline Updated', 'Five-act outline refreshed.');
     } catch (err: any) {
       console.error('Failed to generate outline:', err);
       addToast('error', 'Outline Generation Failed', err.message);
@@ -291,7 +292,7 @@ export const App: React.FC = () => {
       await api.generateOutline(activeProject.id);
       const updated = await api.getProject(activeProject.id);
       setActiveProject(updated);
-      addToast('success', 'Narrative Angle Anchored', `Calibrated 5 Acts to: ${angleTitle}`);
+      addToast('success', 'Angle Selected', angleTitle);
     } catch (err: any) {
       console.error('Failed to set angle:', err);
       addToast('error', 'Angle Selection Failed', err.message);
@@ -305,7 +306,7 @@ export const App: React.FC = () => {
       await api.generateOutline(activeProject.id);
       const updated = await api.getProject(activeProject.id);
       setActiveProject(updated);
-      addToast('info', 'Runtime Calibrated', `Set target duration to ${mins} minutes.`);
+      addToast('info', 'Length Updated', `Target length is now ${mins} minutes.`);
     } catch (err: any) {
       console.error('Failed to update duration:', err);
       addToast('error', 'Runtime Update Failed', err.message);
@@ -322,7 +323,7 @@ export const App: React.FC = () => {
       } catch {
         // ignore: only affects first-visit auto-seeding
       }
-      addToast('success', 'Feeds Seeded', `${data.length} intelligence feeds now registered.`);
+      addToast('success', 'Default Feeds Added', `${data.length} news feeds are set up.`);
     } catch (err: any) {
       console.error('Failed to seed feeds:', err);
       addToast('error', 'Seeding Failed', err.message);
@@ -394,9 +395,26 @@ export const App: React.FC = () => {
         onDeleteProject={handleDeleteProject}
       />
 
-      {/* Main Tactical Workspace Canvas */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-4">
         {activeTab === 'radar' && (
+          <div role="group" aria-label="Story filter" className="inline-flex p-1 rounded-xl bg-slate-900/80 border border-slate-800 text-xs">
+            {[
+              { on: false, label: 'All stories' },
+              { on: true, label: 'India focus' },
+            ].map(({ on, label }) => (
+              <button
+                key={label}
+                onClick={() => setIndiaFocus(on)}
+                aria-pressed={indiaFocus === on}
+                className={`px-3 py-1.5 rounded-lg transition ${indiaFocus === on ? 'bg-slate-700 text-white font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'radar' && !indiaFocus && (
           <EventRadar
             clusters={clusters}
             loading={loadingClusters}
@@ -410,7 +428,7 @@ export const App: React.FC = () => {
           />
         )}
 
-        {activeTab === 'india' && (
+        {activeTab === 'radar' && indiaFocus && (
           <IndiaDesk
             onOpenWarRoom={handleCreateProjectFromCluster}
             isCreatingProject={isCreatingProject}
@@ -457,15 +475,9 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="mt-auto border-t border-slate-900 bg-[#070B12]/80 backdrop-blur-sm px-6 py-4 text-center font-mono text-[11px] text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2 max-w-7xl mx-auto w-full">
-        <div className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          <span>Global Pulse Studio • Geopolitical Intelligence Engine</span>
-        </div>
-        <div>
-          <span>FastAPI + SQLite • React 18 + Vite • Tailwind CSS</span>
-        </div>
+      <footer className="mt-auto border-t border-slate-900 px-6 py-4 text-[11px] text-slate-500 flex items-center justify-between gap-2 max-w-7xl mx-auto w-full">
+        <span>Global Pulse Studio</span>
+        <a href="/docs" target="_blank" rel="noreferrer" className="hover:text-slate-300">API docs</a>
       </footer>
 
       {/* Feedback Toasts */}

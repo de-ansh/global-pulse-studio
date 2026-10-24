@@ -58,25 +58,20 @@ export const EventRadar: React.FC<EventRadarProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Tactical Radar Command Header & Telemetry Pills */}
+      {/* Header & story counts */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-slate-900/40 border border-slate-800/80 backdrop-blur-sm">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-            <h2 className="font-display font-bold text-xl sm:text-2xl text-white">
-              Signals & Crisis Radar
-            </h2>
-          </div>
+          <h2 className="font-display font-bold text-xl sm:text-2xl text-white">Discover stories</h2>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Algorithmic event clustering, maritime friction detection, and explainer score ranking.
+            Recent events grouped from your news feeds, ranked by how well they would work as a video essay. Pick one to research.
           </p>
         </div>
 
-        {/* Live Metrics HUD */}
+        {/* Story counts */}
         <div className="flex items-center gap-2.5 font-mono text-xs overflow-x-auto pb-1 md:pb-0">
           <div className="px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center gap-2">
             <Layers className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-400">Tracked:</span>
+            <span className="text-slate-400">Stories:</span>
             <span className="font-bold text-white">{clusters.length}</span>
           </div>
 
@@ -88,7 +83,7 @@ export const EventRadar: React.FC<EventRadarProps> = ({
 
           <div className="px-3 py-1.5 rounded-xl bg-cyan-950/40 border border-cyan-800/40 flex items-center gap-2">
             <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="text-cyan-300">High Viability:</span>
+            <span className="text-cyan-300 whitespace-nowrap">Strong video potential:</span>
             <span className="font-bold text-cyan-200">{highPotentialCount}</span>
           </div>
         </div>
@@ -174,7 +169,7 @@ export const EventRadar: React.FC<EventRadarProps> = ({
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg transition"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
-            <span>{isScanning ? 'Crawling Feeds...' : 'Crawl Wire Feeds Now'}</span>
+            <span>{isScanning ? 'Fetching news...' : 'Fetch news now'}</span>
           </button>
         </div>
       ) : (

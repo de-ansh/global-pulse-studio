@@ -52,10 +52,10 @@ async def test_claim_fact_check_searches_claim_text(client: AsyncClient, monkeyp
     from app.config import settings
     from app.services import factcheck
 
-    seen = {}
+    seen = {"queries": []}
 
     async def fake_search(query, api_key):
-        seen["query"] = query
+        seen["queries"].append(query)
         return [{"claim": "x", "publisher": "AFP", "rating": "False", "url": "https://factcheck.afp.com/x"}]
 
     monkeypatch.setattr(settings, "FACTCHECK_API_KEY", "k")
@@ -66,7 +66,9 @@ async def test_claim_fact_check_searches_claim_text(client: AsyncClient, monkeyp
     res = await client.get(f"/api/projects/{pid}/claims/{cid}/factchecks")
     assert res.status_code == 200
     assert res.json()[0]["publisher"] == "AFP"
-    assert seen["query"] == "Iran seized two tankers Strait Hormuz Monday"
+    # several phrasings are searched; identical results are merged into one
+    assert seen["queries"][0] == "Iran seized two tankers Strait Hormuz Monday" and len(seen["queries"]) > 1
+    assert len(res.json()) == 1 and res.json()[0]["relevance"] == "unclassified"  # no AI key in tests
 
     assert (await client.get(f"/api/projects/{pid}/claims/clm_nope/factchecks")).status_code == 404
     monkeypatch.setattr(settings, "FACTCHECK_API_KEY", "")
@@ -80,3 +82,43 @@ def test_parse_fact_checks_drops_non_web_urls():
         {"url": "https://ok.example/review", "textualRating": "True"},
     ]}]})
     assert [r["url"] for r in rows] == ["https://ok.example/review"]
+
+
+def test_fact_check_queries_cover_several_phrasings():
+    from app.services.factcheck import fact_check_queries
+    qs = fact_check_queries("Elon Musk ordered Starlink's slowdown in Ukraine amid strained talks", ["Ukraine", "Russia (PLA)"])
+    assert qs == [
+        "Elon Musk ordered Starlink's slowdown Ukraine strained talks",
+        "Elon Musk ordered Starlink's",
+        "Elon Musk Starlink's Ukraine",
+        "Ukraine Russia",
+    ]
+    assert fact_check_queries("a b") == []
+
+
+@pytest.mark.asyncio
+async def test_classify_relevance_labels_sorts_and_drops_unrelated(monkeypatch):
+    from app.config import settings
+    from app.services import factcheck
+    rows = [{"claim": f"c{i}", "publisher": "P", "rating": "False", "url": f"u{i}"} for i in range(3)]
+
+    async def fake_generate(system, prompt, schema, **kw):
+        assert "STATEMENT: Musk slowed Starlink" in prompt and "2. [P, rated 'False'] c2" in prompt
+        return {"results": [
+            {"index": 0, "relevance": "related_topic", "reason": "same war"},
+            {"index": 1, "relevance": "unrelated", "reason": "x"},
+            {"index": 2, "relevance": "same_claim", "reason": "same assertion"},
+        ]}, "m"
+
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "k")
+    monkeypatch.setattr(factcheck.gemini, "generate_json", fake_generate)
+    out = await factcheck.classify_relevance("Musk slowed Starlink", rows)
+    assert [(r["url"], r["relevance"]) for r in out] == [("u2", "same_claim"), ("u0", "related_topic")]
+
+    async def failing(*a, **kw):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=502, detail="Gemini down")
+
+    monkeypatch.setattr(factcheck.gemini, "generate_json", failing)
+    out = await factcheck.classify_relevance("x", rows)
+    assert len(out) == 3 and {r["relevance"] for r in out} == {"unclassified"}  # search still works without triage

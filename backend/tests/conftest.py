@@ -56,3 +56,12 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         yield test_client
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def isolate_from_local_env(monkeypatch):
+    """Ignore secrets from the developer's backend/.env: no login wall, and no real (billed) API calls from tests."""
+    from app.config import settings
+    for name in ("AUTH_PASSWORD", "GEMINI_API_KEY", "FACTCHECK_API_KEY"):
+        monkeypatch.setattr(settings, name, "")
+    monkeypatch.setattr(settings, "SCAN_INTERVAL_MINUTES", 0)

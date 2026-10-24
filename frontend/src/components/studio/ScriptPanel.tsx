@@ -3,6 +3,7 @@ import { NarrationScript, ScriptSource } from '../../types';
 import { api } from '../../api/client';
 import { FileText, RefreshCw, AlertTriangle, HelpCircle, ExternalLink, ShieldCheck, ListPlus } from 'lucide-react';
 import { SupportVerdict, VERDICT_STYLES } from './SupportVerdict';
+import { AI_DISABLED_HINT, useFeatures } from '../../features';
 
 interface ScriptPanelProps {
   projectId: string;
@@ -56,6 +57,8 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
   const [script, setScript] = useState<NarrationScript | null>(null);
   const [generating, setGenerating] = useState(false);
   const [checking, setChecking] = useState(false);
+  const features = useFeatures();
+  const aiTitle = features.ai ? undefined : AI_DISABLED_HINT;
   const [extracting, setExtracting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +130,8 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
         {script && (
           <button
             onClick={extractClaims}
-            disabled={extracting || generating}
+            disabled={extracting || generating || !features.ai}
+            title={aiTitle}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 transition disabled:opacity-60"
           >
             <ListPlus className="w-3.5 h-3.5" />
@@ -137,7 +141,8 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
         {script && (
           <button
             onClick={checkCitations}
-            disabled={checking || generating}
+            disabled={checking || generating || !features.ai}
+            title={aiTitle}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 transition disabled:opacity-60"
           >
             <ShieldCheck className={`w-3.5 h-3.5 ${checking ? 'animate-pulse' : ''}`} />
@@ -146,7 +151,8 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
         )}
         <button
           onClick={generate}
-          disabled={generating || checking}
+          disabled={generating || checking || !features.ai}
+          title={aiTitle}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition disabled:opacity-60"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${generating ? 'animate-spin' : ''}`} />
@@ -158,6 +164,10 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
         Written by Gemini from this event's reports [S#] and your Claim Ledger [C#] only. Every factual line must cite a source;
         citations are then checked in code, and anything unsupported is flagged below.
       </p>
+
+      {!features.ai && (
+        <p className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-400">{AI_DISABLED_HINT}</p>
+      )}
 
       {error && (
         <p role="alert" className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/50 text-xs text-rose-200 font-mono">

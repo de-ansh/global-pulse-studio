@@ -52,3 +52,15 @@ async def test_basic_auth_when_password_set(client: AsyncClient, monkeypatch):
 @pytest.mark.asyncio
 async def test_frontend_source_tree_not_served(client: AsyncClient):
     assert (await client.get("/static/package.json")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_features_reports_flags_only_and_requires_auth(client: AsyncClient, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "secret-gemini")
+    monkeypatch.setattr(settings, "FACTCHECK_API_KEY", "")
+    res = await client.get("/api/health/features")
+    assert res.json() == {"ai": True, "factcheck": False} and "secret" not in res.text
+    monkeypatch.setattr(settings, "AUTH_PASSWORD", "pw")
+    assert (await client.get("/api/health/features")).status_code == 401
+    assert (await client.get("/api/health")).status_code == 200

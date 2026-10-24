@@ -27,7 +27,7 @@ from app.services.ingester import IngestionEngine
 from app.services.clusterer import ClusteringEngine
 
 from app.services.scorer import assign_origins, evaluate_triangulation, verification_label
-from app.services.factcheck import build_fact_check_query, fact_checks_or_http_error
+from app.services.factcheck import find_fact_checks
 
 router = APIRouter(prefix="/api/radar", tags=["Radar"])
 logger = logging.getLogger(__name__)
@@ -328,7 +328,7 @@ async def get_cluster_fact_checks(cluster_id: str, db: AsyncSession = Depends(ge
     cluster = await db.get(EventCluster, cluster_id)
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Event cluster '{cluster_id}' not found.")
-    return await fact_checks_or_http_error(build_fact_check_query(cluster.headline))
+    return await find_fact_checks(cluster.headline, (cluster.key_actors or []) + (cluster.chokepoints or []))
 
 
 @router.get("/articles", response_model=List[ArticleResponse])

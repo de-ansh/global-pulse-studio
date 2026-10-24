@@ -21,6 +21,8 @@ class FactCheckResponse(BaseModel):
     title: Optional[str] = None
     url: str
     review_date: Optional[str] = None
+    relevance: Optional[str] = None  # same_claim | related_topic | unclassified (AI triage)
+    relevance_reason: Optional[str] = None
 
 
 class EventClusterResponse(BaseModel):

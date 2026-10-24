@@ -50,6 +50,12 @@ cd frontend
 npm install
 ```
 
+### Configuration
+Every setting is optional and documented in [`backend/.env.example`](backend/.env.example). To configure keys:
+```bash
+cp backend/.env.example backend/.env   # then fill in the values you need and restart the backend
+```
+
 ### Optional: Enable Fact-Check Lookups
 Event detail views can search published fact-checks (AFP, Reuters, BOOM, PolitiFact and other IFCN signatories) through the free [Google Fact Check Tools API](https://developers.google.com/fact-check/tools/api). Create an API key in Google Cloud, enable the "Fact Check Tools API", then:
 ```bash

@@ -81,7 +81,7 @@ export const ClusterDetailModal: React.FC<ClusterDetailModalProps> = ({
           {/* Strategic Metrics Matrix */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
             <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-              <span className="text-[10px] text-slate-400 uppercase">Explainer Score</span>
+              <span className="text-[10px] text-slate-400 uppercase">Video potential</span>
               <p className="text-lg font-bold text-cyan-400 mt-0.5">{Math.round(current.explainer_score)}/100</p>
             </div>
             <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">

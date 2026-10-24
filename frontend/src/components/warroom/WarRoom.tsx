@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Project, Dossier } from '../../types';
 import { ClaimLedger } from './ClaimLedger';
+import { AI_DISABLED_HINT, useFeatures } from '../../features';
 import {
   ShieldAlert,
   Clock,
@@ -41,6 +42,8 @@ export const WarRoom: React.FC<WarRoomProps> = ({
     project?.target_duration_mins || 18
   );
 
+  const features = useFeatures(); // before the early return: hooks must run on every render
+
   if (!project) {
     return (
       <div className="p-12 text-center rounded-2xl bg-slate-900/40 border border-dashed border-slate-800 space-y-4 max-w-xl mx-auto my-12">
@@ -78,7 +81,7 @@ export const WarRoom: React.FC<WarRoomProps> = ({
             <span className="px-2 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-800/40 font-semibold uppercase">
               {project.status}
             </span>
-            <span className="text-slate-400">Slug: {project.working_slug}</span>
+            <span className="text-slate-400">Step 2 of 3 · Research and verify</span>
           </div>
           <h2 className="font-display font-bold text-xl sm:text-2xl text-white">
             {project.title}
@@ -89,7 +92,7 @@ export const WarRoom: React.FC<WarRoomProps> = ({
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-mono">
             <Clock className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-400">Duration:</span>
+            <span className="text-slate-400">Video length:</span>
             <select
               value={selectedDuration}
               onChange={(e) => {
@@ -99,10 +102,10 @@ export const WarRoom: React.FC<WarRoomProps> = ({
               }}
               className="bg-transparent text-cyan-300 font-bold focus:outline-none cursor-pointer"
             >
-              <option value="12" className="bg-slate-900">12 Mins (Explainer)</option>
-              <option value="18" className="bg-slate-900">18 Mins (Standard)</option>
-              <option value="25" className="bg-slate-900">25 Mins (Deep Dive)</option>
-              <option value="35" className="bg-slate-900">35 Mins (Feature Doc)</option>
+              <option value="12" className="bg-slate-900">12 min</option>
+              <option value="18" className="bg-slate-900">18 min</option>
+              <option value="25" className="bg-slate-900">25 min</option>
+              <option value="35" className="bg-slate-900">35 min</option>
             </select>
           </div>
 
@@ -112,14 +115,14 @@ export const WarRoom: React.FC<WarRoomProps> = ({
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>{isRefreshing ? 'Compiling Dossier...' : 'Synthesize Dossier'}</span>
+            <span>{isRefreshing ? 'Refreshing...' : 'Refresh research'}</span>
           </button>
 
           <button
             onClick={onProceedToStudio}
             className="flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-mono font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-lg transition active:scale-95"
           >
-            <span>Story Studio</span>
+            <span>Next: write the script</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -133,10 +136,10 @@ export const WarRoom: React.FC<WarRoomProps> = ({
           </div>
           <div>
             <h4 className="font-display font-semibold text-base text-slate-300">
-              Research Dossier Not Yet Synthesized
+              No research yet
             </h4>
             <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-              Click &quot;Synthesize Dossier&quot; to compile timelines, strategic geography, stakeholder matrices, and cross-source framing comparisons.
+              Build a timeline, stakeholder list and source list from this story&apos;s coverage.
             </p>
           </div>
           <button
@@ -145,7 +148,7 @@ export const WarRoom: React.FC<WarRoomProps> = ({
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-semibold bg-amber-600 hover:bg-amber-500 text-white shadow-lg transition"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>Synthesize Dossier Now</span>
+            <span>Build research</span>
           </button>
         </div>
       ) : (
@@ -156,7 +159,7 @@ export const WarRoom: React.FC<WarRoomProps> = ({
             <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80">
               <h3 className="font-display font-bold text-base text-white flex items-center gap-2 mb-4">
                 <Clock className="w-4 h-4 text-cyan-400" />
-                <span>Chronological Escalation Timeline</span>
+                <span>Timeline</span>
                 <span className="text-xs font-mono font-normal text-slate-400 ml-auto">
                   {dossier.timeline_events.length} Milestones
                 </span>
@@ -204,7 +207,8 @@ export const WarRoom: React.FC<WarRoomProps> = ({
                 <span>{aiVerified ? 'Verified Disagreements' : 'Framing Comparison'}</span>
                 <button
                   onClick={onFindContradictions}
-                  disabled={isFindingContradictions}
+                  disabled={isFindingContradictions || !features.ai}
+                  title={features.ai ? undefined : AI_DISABLED_HINT}
                   className="ml-auto px-2.5 py-1 rounded-lg text-[11px] font-mono font-normal bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition disabled:opacity-50"
                 >
                   {isFindingContradictions ? 'Comparing reports...' : aiVerified ? 'Re-compare with AI' : 'Find real disagreements (AI)'}
@@ -235,13 +239,13 @@ export const WarRoom: React.FC<WarRoomProps> = ({
                         { label: 'Perspective A', labelClass: 'text-slate-400', text: c.side_a, side: c.a },
                         { label: 'Perspective B', labelClass: 'text-cyan-400', text: c.side_b, side: c.b },
                       ].map(({ label, labelClass, text, side }) => (
-                        <div key={label} className="p-3 rounded-lg bg-slate-900/90 border border-slate-800">
+                        <div key={label} className="min-w-0 p-3 rounded-lg bg-slate-900/90 border border-slate-800">
                           <span className={`text-[10px] ${labelClass} uppercase tracking-wider block mb-1`}>{label}</span>
                           <p className="text-slate-300 font-sans leading-relaxed">{text}</p>
                           {side?.url && (
-                            <a href={side.url} target="_blank" rel="noreferrer" className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-cyan-400 hover:text-cyan-300">
-                              <ExternalLink className="w-3 h-3" />
-                              <span className="truncate">{side.title}</span>
+                            <a href={side.url} target="_blank" rel="noreferrer" title={side.title} className="mt-1.5 flex max-w-full items-center gap-1 text-[10px] text-cyan-400 hover:text-cyan-300">
+                              <ExternalLink className="w-3 h-3 shrink-0" />
+                              <span className="truncate min-w-0">{side.title}</span>
                             </a>
                           )}
                         </div>
@@ -259,7 +263,7 @@ export const WarRoom: React.FC<WarRoomProps> = ({
             <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80">
               <h3 className="font-display font-bold text-base text-white flex items-center gap-2 mb-3">
                 <Users className="w-4 h-4 text-purple-400" />
-                <span>Key Stakeholders</span>
+                <span>Who&apos;s involved</span>
               </h3>
 
               <div className="space-y-2.5">
@@ -282,13 +286,13 @@ export const WarRoom: React.FC<WarRoomProps> = ({
             <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80">
               <h3 className="font-display font-bold text-base text-white flex items-center gap-2 mb-3">
                 <Compass className="w-4 h-4 text-cyan-400" />
-                <span>Strategic Geography</span>
+                <span>Places</span>
               </h3>
 
               <div className="space-y-3 font-mono text-xs">
                 <div>
                   <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">
-                    Maritime & Canal Chokepoints
+                    Chokepoints
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {dossier.geography.chokepoints.length === 0 ? (
@@ -308,7 +312,7 @@ export const WarRoom: React.FC<WarRoomProps> = ({
 
                 <div>
                   <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">
-                    Key Logistics Corridors
+                    Corridors
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {dossier.geography.key_corridors.length === 0 && (
@@ -331,7 +335,7 @@ export const WarRoom: React.FC<WarRoomProps> = ({
             <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80">
               <h3 className="font-display font-bold text-base text-white flex items-center gap-2 mb-3">
                 <BookOpen className="w-4 h-4 text-emerald-400" />
-                <span>Primary Citations ({dossier.citations.length})</span>
+                <span>Sources ({dossier.citations.length})</span>
               </h3>
 
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
@@ -359,6 +363,16 @@ export const WarRoom: React.FC<WarRoomProps> = ({
       )}
 
       <ClaimLedger projectId={project.id} />
+
+      <div className="flex justify-end">
+        <button
+          onClick={onProceedToStudio}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-purple-600 hover:bg-purple-500 text-white transition"
+        >
+          <span>Next: write the script</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
     </div>
   );
 };

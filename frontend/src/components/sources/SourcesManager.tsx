@@ -51,11 +51,11 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
           <div className="flex items-center gap-2">
             <Globe2 className="w-5 h-5 text-emerald-400" />
             <h2 className="font-display font-bold text-xl sm:text-2xl text-white">
-              Signals & Feed Registry
+              News feeds
             </h2>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Authoritative international reporting syndicates, policy think tanks, and geopolitical wire feeds.
+            The outlets stories are gathered from. Tag each with its media ecosystem so stories can be cross-checked.
           </p>
         </div>
 
@@ -64,10 +64,10 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
             onClick={onSeedDefaults}
             disabled={isSeeding}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
-            title="Seed BBC, Al Jazeera, CFR, and CSIS feeds"
+            title="Add the built-in news and think-tank feeds"
           >
             <Sparkles className={`w-3.5 h-3.5 text-amber-400 ${isSeeding ? 'animate-spin' : ''}`} />
-            <span>{isSeeding ? 'Seeding...' : 'Seed Defaults'}</span>
+            <span>{isSeeding ? 'Adding...' : 'Add default feeds'}</span>
           </button>
 
           <button

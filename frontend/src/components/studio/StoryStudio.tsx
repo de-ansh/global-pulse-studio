@@ -108,7 +108,7 @@ export const StoryStudio: React.FC<StoryStudioProps> = ({
             <span className="px-2 py-0.5 rounded bg-purple-950/60 text-purple-300 border border-purple-800/40 font-semibold uppercase">
               {project.status}
             </span>
-            <span className="text-slate-400">Target Duration: {project.target_duration_mins} mins</span>
+            <span className="text-slate-400">Step 3 of 3 · {project.target_duration_mins}-minute script</span>
           </div>
           <h2 className="font-display font-bold text-xl sm:text-2xl text-white">
             {project.title}
@@ -122,7 +122,7 @@ export const StoryStudio: React.FC<StoryStudioProps> = ({
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isGeneratingOutline ? 'animate-spin' : ''}`} />
-            <span>{isGeneratingOutline ? 'Generating...' : 'Re-synthesize 5 Acts'}</span>
+            <span>{isGeneratingOutline ? 'Refreshing...' : 'Refresh outline'}</span>
           </button>
 
           <button
@@ -131,7 +131,7 @@ export const StoryStudio: React.FC<StoryStudioProps> = ({
             className="flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-mono font-semibold bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg transition active:scale-95"
           >
             <FileDown className="w-3.5 h-3.5" />
-            <span>{isExporting ? 'Exporting...' : 'Export Markdown'}</span>
+            <span>{isExporting ? 'Exporting...' : 'Export'}</span>
           </button>
         </div>
       </div>
@@ -142,11 +142,11 @@ export const StoryStudio: React.FC<StoryStudioProps> = ({
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-purple-400" />
             <h3 className="font-display font-bold text-lg text-white">
-              Narrative Angle Synthesis
+              Choose an angle
             </h3>
           </div>
           <span className="text-xs font-mono text-slate-400">
-            Select a geopolitical lens to anchor documentary pacing
+            Optional: the script will lean into the angle you pick
           </span>
         </div>
         <p className="text-[11px] font-mono text-amber-300/80">
@@ -206,7 +206,15 @@ export const StoryStudio: React.FC<StoryStudioProps> = ({
         )}
       </div>
 
-      {/* 5-Act Documentary Essay Structure */}
+      {/* Cited narration script (Gemini) */}
+      <ScriptPanel projectId={project.id} />
+
+      {/* Template outline the script follows; secondary, so collapsed by default */}
+      <details className="group rounded-2xl bg-slate-900/30 border border-slate-800/80">
+        <summary className="cursor-pointer px-5 py-3 text-sm font-semibold text-slate-300 hover:text-white">
+          Five-act outline (the structure the script follows)
+        </summary>
+        <div className="p-5 pt-0">
       {!outline ? (
         <div className="p-12 text-center rounded-2xl bg-slate-900/30 border border-dashed border-slate-800 space-y-4">
           <div className="w-12 h-12 rounded-full bg-slate-800/80 flex items-center justify-center mx-auto text-slate-500">
@@ -214,10 +222,10 @@ export const StoryStudio: React.FC<StoryStudioProps> = ({
           </div>
           <div>
             <h4 className="font-display font-semibold text-base text-slate-300">
-              5-Act Documentary Script Outline Not Generated Yet
+              No outline yet
             </h4>
             <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-              Select an angle and click &quot;Generate 5 Acts&quot; to synthesize act timecodes, inquiry questions, and B-roll/3D graphics visual prompts.
+              Generate a five-act structure with timecodes, questions and visual ideas. The script follows it.
             </p>
           </div>
           <button
@@ -226,7 +234,7 @@ export const StoryStudio: React.FC<StoryStudioProps> = ({
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-lg transition"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isGeneratingOutline ? 'animate-spin' : ''}`} />
-            <span>Generate 5 Acts Now</span>
+            <span>Generate outline</span>
           </button>
         </div>
       ) : (
@@ -263,7 +271,7 @@ export const StoryStudio: React.FC<StoryStudioProps> = ({
             <div className="flex items-center justify-between">
               <h4 className="font-display font-bold text-lg text-white flex items-center gap-2">
                 <Film className="w-4 h-4 text-purple-400" />
-                <span>5-Act Documentary Essay Architecture</span>
+                <span>Five-act outline</span>
               </h4>
               <span className="text-xs font-mono text-slate-400">
                 Pacing calibrated for {project.target_duration_mins} minute runtime
@@ -341,9 +349,8 @@ export const StoryStudio: React.FC<StoryStudioProps> = ({
           </div>
         </div>
       )}
-
-      {/* Cited narration script (Gemini) */}
-      <ScriptPanel projectId={project.id} />
+        </div>
+      </details>
 
       {/* Export Markdown Modal */}
       <ExportModal

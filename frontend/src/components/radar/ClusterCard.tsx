@@ -117,7 +117,7 @@ export const ClusterCard: React.FC<ClusterCardProps> = ({
           onClick={() => onInspect(cluster)}
           className="text-xs font-mono text-slate-400 hover:text-slate-200 transition underline underline-offset-4 decoration-slate-700"
         >
-          Inspect Signals
+          Details
         </button>
 
         <button
@@ -125,7 +125,7 @@ export const ClusterCard: React.FC<ClusterCardProps> = ({
           disabled={isCreatingProject}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium bg-cyan-600 hover:bg-cyan-500 text-white shadow-sm transition active:scale-95"
         >
-          <span>War Room</span>
+          <span>Research</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>

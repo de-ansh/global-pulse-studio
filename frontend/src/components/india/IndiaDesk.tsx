@@ -103,14 +103,13 @@ export const IndiaDesk: React.FC<IndiaDeskProps> = ({
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                 <span className="text-slate-300 font-bold ml-1">INDIA STRATEGIC DESK</span>
               </span>
-              <span className="text-xs font-mono text-orange-400">Multi-Source Verification Engine</span>
             </div>
 
             <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-white tracking-tight">
               India & Indo-Pacific Affairs
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
-              Cross-verify geopolitical developments across Indian domestic wire reports, international syndicates, and policy think tanks before writing video essays.
+              India-related stories, with how well each is confirmed across Indian and international outlets.
             </p>
           </div>
 
@@ -121,7 +120,7 @@ export const IndiaDesk: React.FC<IndiaDeskProps> = ({
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg transition active:scale-95"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
-              <span>{isScanning ? 'Crawling...' : 'Scan Feeds'}</span>
+              <span>{isScanning ? 'Fetching...' : 'Fetch news'}</span>
             </button>
             <button
               onClick={fetchIndiaClusters}
@@ -339,7 +338,7 @@ export const IndiaDesk: React.FC<IndiaDeskProps> = ({
                     disabled={isCreatingProject}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium bg-orange-600 hover:bg-orange-500 text-white shadow-sm transition active:scale-95"
                   >
-                    <span>War Room</span>
+                    <span>Research</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>

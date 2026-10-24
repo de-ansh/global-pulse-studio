@@ -33,6 +33,7 @@ class ClaimEvidence(BaseModel):
     # HttpUrl rejects javascript:/data: links that would otherwise be rendered as clickable hrefs.
     url: HttpUrl
     label: str = Field("", max_length=200)
+    archive_url: Optional[HttpUrl] = None
 
 
 class ClaimCreate(BaseModel):
@@ -139,3 +140,49 @@ class ProjectResponse(BaseModel):
 class ProjectDetailResponse(ProjectResponse):
     dossier: Optional[DossierResponse] = None
     script_outline: Optional[ScriptOutlineResponse] = None
+
+
+class ReadinessChecklistItem(BaseModel):
+    id: str
+    label: str
+    passed: bool
+    detail: str
+
+
+class ProjectReadinessResponse(BaseModel):
+    project_id: str
+    score: int  # 0-100
+    status: str  # "ready" | "needs_review" | "unverified"
+    total_claims: int
+    confirmed_claims: int
+    unverified_claims: int
+    disputed_claims: int
+    false_claims: int
+    total_sources: int
+    independent_origins: int
+    script_support_checked: bool
+    script_verdict_summary: Dict[str, int] = {}
+    checklist: List[ReadinessChecklistItem] = []
+    warnings: List[str] = []
+
+
+class SourceSheetCitation(BaseModel):
+    type: str  # "claim" | "script_statement"
+    id: str
+    text: str
+    status: str
+    evidence_urls: List[str] = []
+    archive_urls: List[str] = []
+    verbatim_quotes: List[str] = []
+    outlet: Optional[str] = None
+
+
+class ProjectSourceSheetResponse(BaseModel):
+    project_id: str
+    title: str
+    generated_at: datetime
+    readiness_score: int
+    citations: List[SourceSheetCitation] = []
+    sources: List[Dict[str, Any]] = []
+    markdown: str
+

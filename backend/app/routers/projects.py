@@ -27,12 +27,16 @@ from app.schemas.project import (
     ScriptOutlineResponse,
     ScriptResponse,
     NarrativeAngleOption,
+    ProjectReadinessResponse,
+    ReadinessChecklistItem,
+    ProjectSourceSheetResponse,
+    SourceSheetCitation,
 )
 from app.services import scriptwriter, sourcefinder, verifier
 from app.services.clusterer import tokenize_title
 from app.services.fulltext import ensure_full_text, fetch_page_text, web_client
 from app.schemas.event import FactCheckResponse
-from app.services.factcheck import build_fact_check_query, fact_checks_or_http_error
+from app.services.factcheck import find_fact_checks
 from app.services.scorer import extract_entities_and_chokepoints
 from app.services.narrative import (
     generate_narrative_angles,
@@ -167,12 +171,19 @@ async def list_claims(project_id: str, db: AsyncSession = Depends(get_db)):
 async def create_claim(project_id: str, payload: ClaimCreate, db: AsyncSession = Depends(get_db)):
     """Add a claim to verify. New claims always start unverified."""
     await _get_project_or_404(db, project_id)
+    evidence_data = []
+    for e in payload.evidence:
+        d = e.model_dump(mode="json")
+        if not d.get("archive_url") and d.get("url"):
+            d["archive_url"] = verifier.generate_archive_url(str(d["url"]))
+        evidence_data.append(d)
+
     claim = Claim(
         id=f"clm_{uuid.uuid4().hex[:12]}",
         project_id=project_id,
         text=payload.text.strip(),
         status="unverified",
-        evidence=[e.model_dump(mode="json") for e in payload.evidence],
+        evidence=evidence_data,
     )
     db.add(claim)
     await db.commit()
@@ -189,7 +200,13 @@ async def update_claim(project_id: str, claim_id: str, payload: ClaimUpdate, db:
     if payload.note is not None:
         claim.note = payload.note
     if payload.evidence is not None:
-        claim.evidence = [e.model_dump(mode="json") for e in payload.evidence]
+        evidence_data = []
+        for e in payload.evidence:
+            d = e.model_dump(mode="json")
+            if not d.get("archive_url") and d.get("url"):
+                d["archive_url"] = verifier.generate_archive_url(str(d["url"]))
+            evidence_data.append(d)
+        claim.evidence = evidence_data
     if payload.status is not None and payload.status != claim.status:
         claim.status = payload.status
         claim.status_changed_at = datetime.now(timezone.utc)
@@ -210,7 +227,8 @@ async def delete_claim(project_id: str, claim_id: str, db: AsyncSession = Depend
 async def get_claim_fact_checks(project_id: str, claim_id: str, db: AsyncSession = Depends(get_db)):
     """Search published fact-checks for this specific claim (more precise than the event headline)."""
     claim = await _get_claim_or_404(db, project_id, claim_id)
-    return await fact_checks_or_http_error(build_fact_check_query(claim.text, max_words=8))
+    actors, chokepoints, _ = extract_entities_and_chokepoints(claim.text)
+    return await find_fact_checks(claim.text, actors + chokepoints)
 
 
 CLAIM_CHECK_MAX_ARTICLES = 10
@@ -623,11 +641,244 @@ async def check_script(project_id: str, db: AsyncSession = Depends(get_db)):
     checked = await verifier.check_statements(statements, script.sources)
     for sid, beat in beats.items():
         beat["support"] = {k: checked[sid][k] for k in ("verdict", "quotes", "explanation")}
+        # Check numerical metrics
+        cites = [c for c in beat.get("citations") or [] if c in known]
+        source_texts = [verifier.source_text(s) for s in script.sources if s.get("id") in cites]
+        num_check = verifier.check_numerical_consistency(beat.get("narration", ""), source_texts)
+        if not num_check["is_consistent"] and num_check.get("warning"):
+            beat["support"]["numerical_warning"] = num_check["warning"]
+            if beat["support"]["verdict"] == "supported":
+                beat["support"]["verdict"] = "partly_supported"
     script.content = content
     script.stats = {**(script.stats or {}), "support": verifier.summarize(checked)}
     await db.commit()
     await db.refresh(script)
     return script
+
+
+@router.get("/{project_id}/readiness", response_model=ProjectReadinessResponse)
+async def get_project_readiness(project_id: str, db: AsyncSession = Depends(get_db)):
+    """Calculate the audit readiness score and verification checklist for a project."""
+    stmt = (
+        select(Project)
+        .options(selectinload(Project.script))
+        .where(Project.id == project_id)
+    )
+    res = await db.execute(stmt)
+    project = res.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+
+    claims_res = await db.execute(select(Claim).where(Claim.project_id == project_id))
+    claims = list(claims_res.scalars().all())
+
+    cluster_articles = []
+    if project.cluster_id:
+        articles_res = await db.execute(select(Article).where(Article.cluster_id == project.cluster_id))
+        cluster_articles = list(articles_res.scalars().all())
+
+    script_sources = (project.script.sources or []) if project.script else []
+    total_sources = max(len(cluster_articles), len(script_sources))
+
+    total_claims = len(claims)
+    confirmed_claims = sum(1 for c in claims if c.status == "confirmed")
+    unverified_claims = sum(1 for c in claims if c.status == "unverified")
+    disputed_claims = sum(1 for c in claims if c.status == "disputed")
+    false_claims = sum(1 for c in claims if c.status == "false")
+
+    script_stats = (project.script.stats or {}) if project.script else {}
+    script_support = script_stats.get("support") or {}
+    script_support_checked = bool(script_support)
+    contradicted_statements = script_support.get("contradicted", 0)
+
+    from app.services.scorer import assign_origins
+    origins = assign_origins([(a.source_id, a.title or "") for a in cluster_articles]) if cluster_articles else []
+    independent_origins = len(set(origins)) if origins else (1 if total_sources > 0 else 0)
+
+    score = 0
+    if total_claims > 0:
+        claim_ratio = (confirmed_claims * 1.0 + disputed_claims * 0.3 - false_claims * 0.6) / total_claims
+        score += int(max(0.0, min(1.0, claim_ratio)) * 50)
+    elif total_sources >= 2:
+        score += 25
+
+    if independent_origins >= 3:
+        score += 25
+    elif independent_origins >= 2:
+        score += 15
+    elif independent_origins == 1:
+        score += 5
+
+    if script_support_checked:
+        if contradicted_statements == 0:
+            score += 25
+        else:
+            score += 10
+    elif project.script:
+        score += 10
+
+    score = max(0, min(100, score))
+    status_label = "ready" if score >= 80 else ("needs_review" if score >= 50 else "unverified")
+
+    checklist = [
+        ReadinessChecklistItem(
+            id="multi_source",
+            label="Multi-Source Grounding",
+            passed=independent_origins >= 2,
+            detail=f"{independent_origins} independent origin(s) across {total_sources} source(s)."
+            if independent_origins >= 2
+            else "Single-source or uncorroborated; ingest secondary reporting before finalizing.",
+        ),
+        ReadinessChecklistItem(
+            id="claims_reviewed",
+            label="Claim Ledger Verification",
+            passed=total_claims > 0 and unverified_claims == 0,
+            detail=f"All {total_claims} claims reviewed ({confirmed_claims} confirmed)."
+            if (total_claims > 0 and unverified_claims == 0)
+            else f"{unverified_claims} unverified claim(s) remaining in ledger.",
+        ),
+        ReadinessChecklistItem(
+            id="no_contradictions",
+            label="Contradiction Freedom",
+            passed=false_claims == 0 and contradicted_statements == 0,
+            detail="No claims or script lines marked false or contradicted."
+            if (false_claims == 0 and contradicted_statements == 0)
+            else f"{false_claims} false claim(s), {contradicted_statements} contradicted line(s) detected.",
+        ),
+        ReadinessChecklistItem(
+            id="script_verified",
+            label="Script Evidence Check",
+            passed=script_support_checked and contradicted_statements == 0,
+            detail="Script statements verified character-for-character against sources."
+            if script_support_checked
+            else "Script not yet checked with AI evidence verifier.",
+        ),
+    ]
+
+    warnings = []
+    if false_claims > 0:
+        warnings.append(f"{false_claims} claim(s) marked false in Claim Ledger.")
+    if contradicted_statements > 0:
+        warnings.append(f"{contradicted_statements} script beat(s) contradicted by sources.")
+    if unverified_claims > 0:
+        warnings.append(f"{unverified_claims} claim(s) still unverified in ledger.")
+    if independent_origins < 2:
+        warnings.append("Project relies on fewer than 2 independent news origins.")
+
+    return ProjectReadinessResponse(
+        project_id=project_id,
+        score=score,
+        status=status_label,
+        total_claims=total_claims,
+        confirmed_claims=confirmed_claims,
+        unverified_claims=unverified_claims,
+        disputed_claims=disputed_claims,
+        false_claims=false_claims,
+        total_sources=total_sources,
+        independent_origins=independent_origins,
+        script_support_checked=script_support_checked,
+        script_verdict_summary=script_support,
+        checklist=checklist,
+        warnings=warnings,
+    )
+
+
+@router.get("/{project_id}/source-sheet", response_model=ProjectSourceSheetResponse)
+async def get_project_source_sheet(project_id: str, db: AsyncSession = Depends(get_db)):
+    """Generate a broadcast/video essay citation source sheet linking claims, archive URLs, and verified quotes."""
+    stmt = (
+        select(Project)
+        .options(selectinload(Project.script))
+        .where(Project.id == project_id)
+    )
+    res = await db.execute(stmt)
+    project = res.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+
+    claims_res = await db.execute(select(Claim).where(Claim.project_id == project_id).order_by(Claim.created_at))
+    claims = list(claims_res.scalars().all())
+
+    readiness = await get_project_readiness(project_id, db)
+
+    citations = []
+    for c in claims:
+        evidence_urls = [e.get("url") for e in c.evidence or [] if e.get("url")]
+        archive_urls = [e.get("archive_url") or verifier.generate_archive_url(e.get("url")) for e in c.evidence or [] if e.get("url")]
+        quotes = [q["quote"] for q in (c.ai_check.quotes if c.ai_check else [])]
+        citations.append(SourceSheetCitation(
+            type="claim",
+            id=c.id,
+            text=c.text,
+            status=c.status,
+            evidence_urls=evidence_urls,
+            archive_urls=archive_urls,
+            verbatim_quotes=quotes,
+            outlet=None,
+        ))
+
+    script_sources = (project.script.sources or []) if project.script else []
+
+    md_lines = [
+        f"# Fact-Check & Citation Source Sheet: {project.title}",
+        f"> Generated on {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} | Audit Readiness Score: **{readiness.score}/100** ({readiness.status.upper()})",
+        "",
+        "## 1. Verified Claim Ledger",
+        "| Status | Claim | Primary Evidence | Archive Permalink | Verified Quote |",
+        "| :--- | :--- | :--- | :--- | :--- |",
+    ]
+
+    if not citations:
+        md_lines.append("| — | *No claims recorded in ledger* | — | — | — |")
+    else:
+        for cit in citations:
+            stat_badge = f"`{cit.status.upper()}`"
+            prim_link = f"[{cit.evidence_urls[0]}]({cit.evidence_urls[0]})" if cit.evidence_urls else "*None*"
+            arch_link = f"[Wayback]({cit.archive_urls[0]})" if cit.archive_urls else "*None*"
+            quote_text = f"\"{cit.verbatim_quotes[0][:120]}...\"" if cit.verbatim_quotes else "*None*"
+            clean_text = cit.text.replace("|", "/")
+            md_lines.append(f"| {stat_badge} | {clean_text} | {prim_link} | {arch_link} | {quote_text} |")
+
+    md_lines.extend([
+        "",
+        "## 2. Primary & Secondary Sources",
+        "| ID | Title / Outlet | URL | Type |",
+        "| :--- | :--- | :--- | :--- |",
+    ])
+
+    if not script_sources:
+        md_lines.append("| — | *No source references recorded* | — | — |")
+    else:
+        for s in script_sources:
+            sid = s.get("id", "")
+            title = (s.get("title") or s.get("outlet") or "Source").replace("|", "/")
+            url = s.get("url", "")
+            link = f"[{title}]({url})" if url else title
+            kind = s.get("kind", "source")
+            md_lines.append(f"| `{sid}` | {link} | {url or '—'} | {kind} |")
+
+    md_lines.extend([
+        "",
+        "## 3. Verification Audit Summary",
+        f"- **Total Claims**: {readiness.total_claims} ({readiness.confirmed_claims} confirmed, {readiness.unverified_claims} unverified)",
+        f"- **Independent Origins**: {readiness.independent_origins}",
+        f"- **Script Verification**: {'Passed (0 contradicted)' if (readiness.script_support_checked and readiness.status != 'unverified') else 'Pending or needs review'}",
+    ])
+    if readiness.warnings:
+        md_lines.append("### Editorial Warnings")
+        for w in readiness.warnings:
+            md_lines.append(f"- ⚠️ {w}")
+
+    return ProjectSourceSheetResponse(
+        project_id=project_id,
+        title=project.title,
+        generated_at=datetime.now(timezone.utc),
+        readiness_score=readiness.score,
+        citations=citations,
+        sources=script_sources,
+        markdown="\n".join(md_lines),
+    )
+
 
 
 @router.get("/{project_id}/export", response_class=PlainTextResponse)

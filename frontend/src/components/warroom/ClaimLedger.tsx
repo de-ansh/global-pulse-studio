@@ -3,7 +3,8 @@ import { Claim, ClaimStatus, FactCheck, PrimarySourceResults } from '../../types
 import { api } from '../../api/client';
 import { FactChecks } from '../radar/FactChecks';
 import { SupportVerdict } from '../studio/SupportVerdict';
-import { ListChecks, Trash2, ExternalLink, Plus, SearchCheck, ShieldCheck, Landmark, Check } from 'lucide-react';
+import { ListChecks, Trash2, ExternalLink, Plus, SearchCheck, ShieldCheck, Landmark, Check, ChevronDown } from 'lucide-react';
+import { AI_DISABLED_HINT, useFeatures } from '../../features';
 
 // One-click verdicts are offered only where the AI's verified quotes point clearly one way.
 const SUGGESTED_STATUS: Partial<Record<string, ClaimStatus>> = { supported: 'confirmed', contradicted: 'false' };
@@ -26,6 +27,8 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
   const [factCheckOpen, setFactCheckOpen] = useState<string | null>(null);
   const [aiChecking, setAiChecking] = useState<string | null>(null);
   const [finding, setFinding] = useState<string | null>(null);
+  const [moreOpen, setMoreOpen] = useState<string | null>(null);
+  const features = useFeatures();
   const [primary, setPrimary] = useState<Record<string, PrimarySourceResults>>({});
 
   const findPrimarySources = (claim: Claim) => {
@@ -179,10 +182,10 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
             {claim.evidence.length > 0 && (
               <ul className="space-y-1">
                 {claim.evidence.map((ev, i) => (
-                  <li key={i} className="flex items-center gap-2 text-xs">
-                    <a href={ev.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-cyan-300 hover:text-cyan-200 truncate">
+                  <li key={i} className="flex min-w-0 items-center gap-2 text-xs">
+                    <a href={ev.url} target="_blank" rel="noreferrer" title={ev.label || ev.url} className="flex min-w-0 items-center gap-1 text-cyan-300 hover:text-cyan-200">
                       <ExternalLink className="w-3 h-3 shrink-0" />
-                      <span className="truncate">{ev.label || ev.url}</span>
+                      <span className="truncate min-w-0">{ev.label || ev.url}</span>
                     </a>
                     <button
                       onClick={() => removeEvidence(claim, i)}
@@ -196,21 +199,6 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
               </ul>
             )}
 
-            <div className="space-y-2">
-              <button
-                onClick={() => runAiCheck(claim)}
-                disabled={aiChecking !== null}
-                className="inline-flex items-center gap-1.5 text-xs font-mono text-emerald-300 hover:text-emerald-200 transition disabled:opacity-50"
-              >
-                <ShieldCheck className={`w-3.5 h-3.5 ${aiChecking === claim.id ? 'animate-pulse' : ''}`} />
-                <span>
-                  {aiChecking === claim.id
-                    ? 'Reading the reports and your evidence...'
-                    : claim.ai_check
-                      ? 'Re-run AI evidence check'
-                      : 'AI evidence check (event reports + attached evidence)'}
-                </span>
-              </button>
               {claim.ai_check && (
                 <div className="p-3 rounded-lg bg-slate-900/70 border border-slate-800 space-y-2">
                   <SupportVerdict
@@ -238,17 +226,49 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
                   )}
                 </div>
               )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => runAiCheck(claim)}
+                disabled={aiChecking !== null || !features.ai}
+                title={features.ai ? 'Compare this claim with the story\'s reports and your evidence' : AI_DISABLED_HINT}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-700 hover:bg-emerald-600 text-white transition disabled:opacity-50"
+              >
+                <ShieldCheck className={`w-3.5 h-3.5 ${aiChecking === claim.id ? 'animate-pulse' : ''}`} />
+                <span>{aiChecking === claim.id ? 'Checking...' : claim.ai_check ? 'Verify again' : 'Verify with AI'}</span>
+              </button>
+              <button
+                onClick={() => setMoreOpen(moreOpen === claim.id ? null : claim.id)}
+                aria-expanded={moreOpen === claim.id}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+              >
+                <span>More</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition ${moreOpen === claim.id ? 'rotate-180' : ''}`} />
+              </button>
+              {claim.note && moreOpen !== claim.id && <span className="text-[11px] text-slate-500 truncate">Note: {claim.note}</span>}
             </div>
 
-            <div className="space-y-2">
-              <button
-                onClick={() => findPrimarySources(claim)}
-                disabled={finding !== null}
-                className="inline-flex items-center gap-1.5 text-xs font-mono text-sky-300 hover:text-sky-200 transition disabled:opacity-50"
-              >
-                <Landmark className={`w-3.5 h-3.5 ${finding === claim.id ? 'animate-pulse' : ''}`} />
-                <span>{finding === claim.id ? 'Searching the web...' : 'Find primary sources (AI web search)'}</span>
-              </button>
+            {moreOpen === claim.id && (
+              <div className="space-y-3 pt-1 border-t border-slate-800/80">
+                <div className="flex flex-wrap gap-2 pt-3">
+                  <button
+                    onClick={() => findPrimarySources(claim)}
+                    disabled={finding !== null || !features.ai}
+                    title={features.ai ? undefined : AI_DISABLED_HINT}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 transition disabled:opacity-50"
+                  >
+                    <Landmark className={`w-3.5 h-3.5 ${finding === claim.id ? 'animate-pulse' : ''}`} />
+                    <span>{finding === claim.id ? 'Searching the web...' : 'Find primary sources'}</span>
+                  </button>
+                  <button
+                    onClick={() => setFactCheckOpen(factCheckOpen === claim.id ? null : claim.id)}
+                    aria-expanded={factCheckOpen === claim.id}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition"
+                  >
+                    <SearchCheck className="w-3.5 h-3.5" />
+                    <span>{factCheckOpen === claim.id ? 'Hide fact-checks' : 'Search published fact-checks'}</span>
+                  </button>
+                </div>
               {primary[claim.id] && (
                 <div className="p-3 rounded-lg bg-slate-900/70 border border-slate-800 space-y-2">
                   <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">AI summary of what the search found (verify in the sources)</p>
@@ -266,7 +286,7 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
                               Official
                             </span>
                           )}
-                          <a href={src.url} target="_blank" rel="noreferrer" className="text-cyan-300 hover:text-cyan-200 inline-flex items-center gap-1 truncate">
+                          <a href={src.url} target="_blank" rel="noreferrer" className="text-cyan-300 hover:text-cyan-200 flex min-w-0 items-center gap-1 truncate">
                             {src.domain} <ExternalLink className="w-3 h-3 shrink-0" />
                           </a>
                           {!src.resolved && <span className="text-amber-300 text-[10px]">temporary link</span>}
@@ -285,25 +305,14 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
                   })}
                 </div>
               )}
-            </div>
-
-            <button
-              onClick={() => setFactCheckOpen(factCheckOpen === claim.id ? null : claim.id)}
-              aria-expanded={factCheckOpen === claim.id}
-              className="inline-flex items-center gap-1.5 text-xs font-mono text-amber-300 hover:text-amber-200 transition"
-            >
-              <SearchCheck className="w-3.5 h-3.5" />
-              <span>{factCheckOpen === claim.id ? 'Hide fact-checks' : 'Find published fact-checks for this claim'}</span>
-            </button>
-            {factCheckOpen === claim.id && (
-              <FactChecks
-                load={() => api.getClaimFactChecks(projectId, claim.id)}
-                subject="this claim"
-                onAdd={(fc) => addFactCheckEvidence(claim, fc)}
-                addedUrls={claim.evidence.map((e) => e.url)}
-              />
-            )}
-
+                {factCheckOpen === claim.id && (
+                  <FactChecks
+                    load={() => api.getClaimFactChecks(projectId, claim.id)}
+                    subject="this claim"
+                    onAdd={(fc) => addFactCheckEvidence(claim, fc)}
+                    addedUrls={claim.evidence.map((e) => e.url)}
+                  />
+                )}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -315,7 +324,7 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
                 name="url"
                 type="url"
                 required
-                placeholder="Evidence URL (official statement, document, OSINT)"
+                placeholder="Add evidence: paste a link"
                 aria-label="Evidence URL"
                 className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
               />
@@ -330,7 +339,6 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
                 Attach
               </button>
             </form>
-
             <textarea
               defaultValue={claim.note || ''}
               onBlur={(e) => {
@@ -345,6 +353,8 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
               aria-label="Verdict note"
               className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
             />
+              </div>
+            )}
           </div>
         ))}
       </div>

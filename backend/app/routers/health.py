@@ -15,3 +15,12 @@ async def get_health():
         "version": settings.APP_VERSION,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@router.get("/features")
+async def get_features():
+    """Which optional features are configured, so the UI can disable buttons instead of failing on click.
+
+    Booleans only, never key material; unlike the bare health probe, this path sits behind auth when enabled.
+    """
+    return {"ai": bool(settings.GEMINI_API_KEY), "factcheck": bool(settings.FACTCHECK_API_KEY)}

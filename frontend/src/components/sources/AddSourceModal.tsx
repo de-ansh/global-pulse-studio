@@ -149,7 +149,7 @@ export const AddSourceModal: React.FC<AddSourceModalProps> = ({
                 onChange={(e) => setSourceType(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500 cursor-pointer"
               >
-                <option value="wire">Wire Syndicate</option>
+                <option value="wire">News wire</option>
                 <option value="think_tank">Policy Think Tank</option>
                 <option value="gov">Official / Gov</option>
                 <option value="independent">Independent OSINT</option>

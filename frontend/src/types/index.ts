@@ -83,6 +83,8 @@ export interface FactCheck {
   title?: string | null;
   url: string;
   review_date?: string | null;
+  relevance?: 'same_claim' | 'related_topic' | 'unclassified' | null; // AI triage against the searched statement
+  relevance_reason?: string | null;
 }
 
 export type ClaimStatus = 'unverified' | 'confirmed' | 'disputed' | 'false';
@@ -90,6 +92,7 @@ export type ClaimStatus = 'unverified' | 'confirmed' | 'disputed' | 'false';
 export interface ClaimEvidence {
   url: string;
   label: string;
+  archive_url?: string | null;
 }
 
 export interface Claim {

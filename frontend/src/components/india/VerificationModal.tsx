@@ -216,7 +216,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
             }}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-mono font-semibold bg-orange-600 hover:bg-orange-500 text-white shadow-md transition"
           >
-            <span>Proceed to War Room</span>
+            <span>Research this story</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>

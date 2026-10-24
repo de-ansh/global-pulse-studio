@@ -231,3 +231,97 @@ async def extract_claims(lines: List[Dict[str, Any]], existing: List[str]) -> Li
         if len(kept) >= MAX_EXTRACTED_CLAIMS:
             break
     return kept
+
+
+def generate_archive_url(url: str) -> str:
+    """Generate permanent web archive URL fallback (Wayback Machine)."""
+    cleaned = (url or "").strip()
+    if not cleaned:
+        return ""
+    if cleaned.startswith(("https://web.archive.org/", "http://web.archive.org/", "https://archive.today/", "https://archive.is/")):
+        return cleaned
+    return f"https://web.archive.org/web/*/{cleaned}"
+
+
+def extract_numerical_metrics(text: str) -> List[Dict[str, Any]]:
+    """Extract checkable numeric metrics: currency, percentages, military/casualty counts, and key quantities."""
+    if not text:
+        return []
+    metrics: List[Dict[str, Any]] = []
+
+    # Currency amounts: $4.5B, €100m, £50,000, Rs 500 crore
+    for m in re.finditer(r"[\$€£¥]\s?\d+(?:[.,]\d+)?(?:\s?(?:billion|million|trillion|crore|lakh|[bmk]))?", text, re.IGNORECASE):
+        metrics.append({"kind": "currency", "raw": m.group(0).strip()})
+
+    # Percentages: 15%, 3.5 percent
+    for m in re.finditer(r"\b\d+(?:[.,]\d+)?\s*(?:%|percent\b)", text, re.IGNORECASE):
+        metrics.append({"kind": "percentage", "raw": m.group(0).strip()})
+
+    # Quantity with military / casualty / maritime unit
+    units = (
+        "troops|soldiers|sailors|warships|tanks|aircraft|vessels|missiles|"
+        "dead|killed|fatalities|casualties|wounded|detained|hostages|civilians|km|miles|tons|barrels"
+    )
+    for m in re.finditer(rf"\b\d+(?:[.,]\d+)?\s*(?:{units})\b", text, re.IGNORECASE):
+        metrics.append({"kind": "quantity", "raw": m.group(0).strip()})
+
+    # Standalone cardinal numbers (excluding 4-digit years 1900-2099)
+    for m in re.finditer(r"\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b|\b\d+(?:\.\d+)?\b", text):
+        raw = m.group(0).strip()
+        if re.fullmatch(r"(?:19|20)\d{2}", raw):
+            continue
+        if not any(raw in m_item["raw"] for m_item in metrics):
+            metrics.append({"kind": "number", "raw": raw})
+
+    return metrics
+
+
+def check_numerical_consistency(statement: str, source_texts: List[str]) -> Dict[str, Any]:
+    """Check whether numerical metrics in a statement appear in any supporting source text.
+    
+    Returns:
+      {
+        'checked': True,
+        'metrics_found': [...],
+        'unverified_metrics': [...],
+        'is_consistent': bool,
+        'warning': Optional[str]
+      }
+    """
+    metrics = extract_numerical_metrics(statement)
+    if not metrics:
+        return {
+            "checked": False,
+            "metrics_found": [],
+            "unverified_metrics": [],
+            "is_consistent": True,
+            "warning": None,
+        }
+
+    combined_sources = " ".join(source_texts or [])
+    norm_source = _normalize(combined_sources)
+    unverified: List[Dict[str, Any]] = []
+
+    for item in metrics:
+        raw = item["raw"]
+        norm_raw = _normalize(raw)
+        # Check raw string or plain number representation
+        plain_digits = re.sub(r"[^\d.]", "", raw)
+        found = (norm_raw in norm_source) or (plain_digits and plain_digits in norm_source)
+        if not found:
+            unverified.append(item)
+
+    is_consistent = len(unverified) == 0
+    warning = None
+    if not is_consistent:
+        unverified_str = ", ".join(f"'{u['raw']}'" for u in unverified)
+        warning = f"Metrics {unverified_str} not corroborated by cited sources."
+
+    return {
+        "checked": True,
+        "metrics_found": metrics,
+        "unverified_metrics": unverified,
+        "is_consistent": is_consistent,
+        "warning": warning,
+    }
+

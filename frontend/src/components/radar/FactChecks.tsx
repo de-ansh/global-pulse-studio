@@ -14,6 +14,7 @@ export const FactChecks: React.FC<FactChecksProps> = ({ load, subject = 'this st
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showRelated, setShowRelated] = useState(false);
 
   const search = async () => {
     setLoading(true);
@@ -26,6 +27,11 @@ export const FactChecks: React.FC<FactChecksProps> = ({ load, subject = 'this st
       setLoading(false);
     }
   };
+
+  // Same-claim (and unlabelled, when AI triage is off) results lead; related-topic ones are opt-in.
+  const primary = (results || []).filter((r) => r.relevance !== 'related_topic');
+  const related = (results || []).filter((r) => r.relevance === 'related_topic');
+  const shown = showRelated ? [...primary, ...related] : primary;
 
   const add = async (fc: FactCheck) => {
     if (!onAdd) return;
@@ -62,20 +68,40 @@ export const FactChecks: React.FC<FactChecksProps> = ({ load, subject = 'this st
         </p>
       )}
 
-      {results && results.length === 0 && (
+      {results && primary.length === 0 && (
         <p className="p-3 rounded-xl bg-slate-900/40 border border-dashed border-slate-800 text-xs text-slate-400 font-sans">
-          No published fact-checks match {subject}. That is not a confirmation, only that no fact-checker has reviewed it yet.
+          No published fact-check reviews {subject} itself
+          {related.length > 0 ? `; ${related.length} cover related claims on the same story` : ''}. That is not a
+          confirmation either way: most news facts are never fact-checked. Use Verify with AI and primary sources instead.
         </p>
       )}
 
-      {results && results.length > 0 && (
+      {results && related.length > 0 && (
+        <button
+          onClick={() => setShowRelated((v) => !v)}
+          aria-expanded={showRelated}
+          className="text-[11px] font-mono text-slate-400 hover:text-slate-200"
+        >
+          {showRelated ? 'Hide' : 'Show'} {related.length} related-topic fact-check{related.length === 1 ? '' : 's'} (different claims, same story)
+        </button>
+      )}
+
+      {results && shown.length > 0 && (
         <div className="space-y-2">
-          {results.map((fc, i) => {
+          {shown.map((fc, i) => {
             const added = addedUrls.includes(fc.url);
             return (
               <div key={i} className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition">
                 <a href={fc.url} target="_blank" rel="noreferrer" className="block">
-                  <div className="flex items-center gap-2 font-mono text-[10px] mb-1">
+                  <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] mb-1">
+                    {fc.relevance === 'same_claim' && (
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold uppercase">
+                        Same claim
+                      </span>
+                    )}
+                    {fc.relevance === 'related_topic' && (
+                      <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase">Related topic</span>
+                    )}
                     <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold uppercase">
                       {fc.rating}
                     </span>
@@ -87,6 +113,7 @@ export const FactChecks: React.FC<FactChecksProps> = ({ load, subject = 'this st
                     {fc.claimant && <span className="text-slate-400">{fc.claimant}: </span>}
                     {fc.claim}
                   </p>
+                  {fc.relevance_reason && <p className="mt-1 text-[11px] text-slate-500 italic">{fc.relevance_reason}</p>}
                 </a>
                 {onAdd && (
                   <button
