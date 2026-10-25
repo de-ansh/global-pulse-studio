@@ -392,11 +392,13 @@ async def crosscheck_claim_cluster(project_id: str, claim_id: str, db: AsyncSess
         ]
     else:
         art_dicts = [
-            {"id": a.id, "title": a.title or "", "summary": a.summary or "", "text": a.clean_text or "", "outlet": a.source_id, "url": a.url}
+            {"id": a.id, "title": a.title or "", "summary": a.summary or "", "text": a.clean_text or "", "outlet": a.source_id, "url": a.url, "published_at": a.published_at}
             for a in articles
         ]
 
     result = verifier.crosscheck_claim_against_articles(claim.text, art_dicts)
+    retraction_check = verifier.detect_superseded_claim(claim.text, claim.created_at, art_dicts)
+    superseded_warning = retraction_check["warning"] if retraction_check["is_superseded"] else None
 
     return ClusterCrossCheckResponse(
         claim_id=claim.id,
@@ -408,6 +410,7 @@ async def crosscheck_claim_cluster(project_id: str, claim_id: str, db: AsyncSess
         disputing=result["disputing"],
         silent_count=result["silent_count"],
         total_checked=result["total_checked"],
+        superseded_warning=superseded_warning,
     )
 
 

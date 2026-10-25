@@ -555,5 +555,58 @@ def evaluate_source_governance_risk(sources: List[Dict[str, Any]]) -> Dict[str, 
     }
 
 
+REVISION_PATTERNS = [
+    r"\b(?:revised down|revised the|lowered the|retracted|corrected|earlier reports? (?:of|claiming)|initially reported|clarified that|amended)\b",
+    r"\b(?:official toll (?:reduced|lowered)|death toll revised)\b",
+]
+
+
+def detect_superseded_claim(
+    claim_text: str,
+    claim_time: Any,
+    articles: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Detect if later reporting in the cluster revised, corrected, or retracted an earlier claim."""
+    from app.services.clusterer import tokenize_title
+    c_tokens = tokenize_title(claim_text)
+    if not c_tokens:
+        return {"is_superseded": False, "superseding_article": None, "warning": None}
+
+    for art in articles or []:
+        pub = art.get("published_at")
+        # If claim has a timestamp and article has a timestamp, ensure article is newer
+        if claim_time and pub and hasattr(pub, "__lt__") and hasattr(claim_time, "__lt__"):
+            try:
+                if pub <= claim_time:
+                    continue
+            except TypeError:
+                pass
+
+        text = f"{art.get('title', '')} {art.get('summary', '')} {art.get('text', '')}"
+        norm = _normalize(text)
+        art_tokens = tokenize_title(f"{art.get('title', '')} {art.get('summary', '')}")
+
+        # Check topic relevance (at least 2 shared keywords)
+        if len(c_tokens.intersection(art_tokens)) < 2:
+            continue
+
+        has_revision = any(re.search(pat, norm, re.IGNORECASE) for pat in REVISION_PATTERNS)
+        if has_revision:
+            outlet = art.get("outlet", "Wire")
+            return {
+                "is_superseded": True,
+                "superseding_article": {
+                    "id": art.get("id"),
+                    "title": art.get("title"),
+                    "outlet": outlet,
+                    "url": art.get("url"),
+                },
+                "warning": f"Later update from [{outlet}] reports a revision or retraction: '{art.get('title')}'",
+            }
+
+    return {"is_superseded": False, "superseding_article": None, "warning": None}
+
+
+
 
 

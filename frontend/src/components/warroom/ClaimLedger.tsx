@@ -398,6 +398,20 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
                       </span>
                     </div>
 
+                    {crossChecks[claim.id].superseded_warning && (
+                      <div className="p-2.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold text-[10px] uppercase font-mono tracking-wider">
+                            Breaking Story Retraction / Revision Flag
+                          </div>
+                          <div className="text-[11px] mt-0.5 text-amber-200">
+                            {crossChecks[claim.id].superseded_warning}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {crossChecks[claim.id].disputing.length > 0 && (
                       <div className="space-y-1 pt-1">
                         <div className="text-[10px] font-mono font-bold uppercase text-rose-400 flex items-center gap-1">

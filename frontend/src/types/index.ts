@@ -364,5 +364,6 @@ export interface ClusterCrossCheckResult {
   disputing: ClusterCrossCheckArticle[];
   silent_count: number;
   total_checked: number;
+  superseded_warning?: string | null;
 }
 

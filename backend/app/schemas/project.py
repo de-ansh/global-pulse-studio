@@ -213,5 +213,6 @@ class ClusterCrossCheckResponse(BaseModel):
     disputing: List[ClusterCrossCheckArticle] = []
     silent_count: int
     total_checked: int
+    superseded_warning: Optional[str] = None
 
 
