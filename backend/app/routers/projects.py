@@ -242,8 +242,14 @@ async def delete_claim(project_id: str, claim_id: str, db: AsyncSession = Depend
 async def get_claim_fact_checks(project_id: str, claim_id: str, db: AsyncSession = Depends(get_db)):
     """Search published fact-checks for this specific claim (more precise than the event headline)."""
     claim = await _get_claim_or_404(db, project_id, claim_id)
+    project = await _get_project_or_404(db, project_id)
+    region = None
+    if project.cluster_id:
+        cluster = await db.get(EventCluster, project.cluster_id)
+        if cluster:
+            region = cluster.region
     actors, chokepoints, _ = extract_entities_and_chokepoints(claim.text)
-    return await find_fact_checks(claim.text, actors + chokepoints)
+    return await find_fact_checks(claim.text, actors + chokepoints, region=region)
 
 
 CLAIM_CHECK_MAX_ARTICLES = 10

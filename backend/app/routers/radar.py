@@ -330,7 +330,7 @@ async def get_cluster_fact_checks(cluster_id: str, db: AsyncSession = Depends(ge
     cluster = await db.get(EventCluster, cluster_id)
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Event cluster '{cluster_id}' not found.")
-    return await find_fact_checks(cluster.headline, (cluster.key_actors or []) + (cluster.chokepoints or []))
+    return await find_fact_checks(cluster.headline, (cluster.key_actors or []) + (cluster.chokepoints or []), region=cluster.region)
 
 
 @router.get("/articles", response_model=List[ArticleResponse])

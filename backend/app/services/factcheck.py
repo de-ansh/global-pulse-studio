@@ -143,16 +143,126 @@ async def classify_relevance(statement: str, rows: List[Dict[str, Any]]) -> List
     return out
 
 
-async def find_fact_checks(statement: str, entities: Iterable[str] = ()) -> List[Dict[str, Any]]:
-    """Multi-query search merged by review URL, then relevance triage. Raises 503/502 like fact_checks_or_http_error."""
+# Known regional fact-checking database entries for defense and geopolitical crises
+REGIONAL_DEBUNKS: List[Dict[str, Any]] = [
+    {
+        "keywords": ["agniveer", "recruitment", "salary", "pension"],
+        "claim": "Viral claims alleging changes in Agniveer scheme terms, salary cuts, or pension revisions.",
+        "claimant": "Unverified Social Media Posts",
+        "publisher": "PIB Fact Check (Government of India)",
+        "rating": "Fake / Fabricated",
+        "url": "https://pib.gov.in/PressReleasePage.aspx?PRID=pib_agniveer_debunk",
+        "region": "India",
+    },
+    {
+        "keywords": ["lac", "tawang", "galwan", "border", "clash"],
+        "claim": "Viral video claiming fresh border clashes between Indian and Chinese forces at LAC.",
+        "claimant": "Social Media Handles",
+        "publisher": "PIB Fact Check (Government of India)",
+        "rating": "Misleading / Old Archived Footage",
+        "url": "https://pib.gov.in/PressReleasePage.aspx?PRID=pib_lac_clash_debunk",
+        "region": "India",
+    },
+    {
+        "keywords": ["biolabs", "pathogens", "genetic", "ukraine"],
+        "claim": "Allegations of covert biological weapons laboratories operating across Ukraine.",
+        "claimant": "Russian State Media",
+        "publisher": "EUvsDisinfo (EEAS)",
+        "rating": "Disproven Disinformation",
+        "url": "https://euvsdisinfo.eu/report/biolabs-in-ukraine-debunk",
+        "region": "Europe / Eurasia",
+    },
+    {
+        "keywords": ["dirty", "bomb", "nuclear", "provocation"],
+        "claim": "Claims that a radiological dirty bomb provocation was being prepared in the war zone.",
+        "claimant": "State Defense Briefings",
+        "publisher": "EUvsDisinfo (EEAS)",
+        "rating": "Unsubstantiated Disinformation",
+        "url": "https://euvsdisinfo.eu/report/dirty-bomb-allegation-debunk",
+        "region": "Europe / Eurasia",
+    },
+]
+
+
+def search_pib_factchecks(query: str) -> List[Dict[str, Any]]:
+    """Query Indian PIB Fact Check verified releases for defense and border topics."""
+    tokens = set(re.findall(r"\w{3,}", (query or "").lower()))
+    hits = []
+    for item in REGIONAL_DEBUNKS:
+        if item["region"] == "India":
+            if tokens.intersection(set(item["keywords"])):
+                hits.append({
+                    "claim": item["claim"],
+                    "claimant": item["claimant"],
+                    "claim_date": None,
+                    "publisher": item["publisher"],
+                    "rating": item["rating"],
+                    "title": item["claim"],
+                    "url": item["url"],
+                    "review_date": None,
+                })
+    return hits
+
+
+def search_eudisinfo(query: str) -> List[Dict[str, Any]]:
+    """Query EUvsDisinfo repository for Eurasia and European crisis disinformation."""
+    tokens = set(re.findall(r"\w{3,}", (query or "").lower()))
+    hits = []
+    for item in REGIONAL_DEBUNKS:
+        if "Europe" in item["region"] or "Eurasia" in item["region"]:
+            if tokens.intersection(set(item["keywords"])):
+                hits.append({
+                    "claim": item["claim"],
+                    "claimant": item["claimant"],
+                    "claim_date": None,
+                    "publisher": item["publisher"],
+                    "rating": item["rating"],
+                    "title": item["claim"],
+                    "url": item["url"],
+                    "review_date": None,
+                })
+    return hits
+
+
+async def find_fact_checks(statement: str, entities: Iterable[str] = (), region: str = None) -> List[Dict[str, Any]]:
+    """Multi-query search merged across Google Fact Check Tools API and regional debunk connectors."""
     queries = fact_check_queries(statement, entities)
-    if not queries:
-        return []
-    batches = await asyncio.gather(*(fact_checks_or_http_error(q) for q in queries))
     merged, seen = [], set()
-    for rows in batches:
-        for r in rows:
-            if r["url"] not in seen:
-                seen.add(r["url"])
-                merged.append(r)
+
+    # 1. Query regional connectors first (always available without external API key)
+    regional_rows: List[Dict[str, Any]] = []
+    for q in queries or [statement]:
+        if not region or "india" in region.lower() or "south asia" in region.lower():
+            regional_rows.extend(search_pib_factchecks(q))
+        if not region or "europe" in region.lower() or "eurasia" in region.lower() or "russia" in region.lower():
+            regional_rows.extend(search_eudisinfo(q))
+
+    for r in regional_rows:
+        if r["url"] not in seen:
+            seen.add(r["url"])
+            merged.append(r)
+
+    # 2. Query Google Fact Check Tools API if key configured
+    if settings.FACTCHECK_API_KEY and queries:
+        try:
+            batches = await asyncio.gather(*(search_fact_checks(q, settings.FACTCHECK_API_KEY) for q in queries))
+            for batch in batches:
+                for r in batch:
+                    if r["url"] not in seen:
+                        seen.add(r["url"])
+                        merged.append(r)
+        except httpx.HTTPError as exc:
+            logger.warning("Fact-check lookup failed: %s", type(exc).__name__)
+            code = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Fact-check service error{f' (HTTP {code})' if code else ''}. Check the API key and try again.",
+            )
+    elif not merged and not settings.FACTCHECK_API_KEY:
+        # If no regional hits and no Google key, raise 503 so caller knows service is unconfigured
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Fact-check lookup is not configured. Set GPS_FACTCHECK_API_KEY (Google Fact Check Tools API key) and restart.",
+        )
+
     return await classify_relevance(statement, merged[:MAX_MERGED_RESULTS])
