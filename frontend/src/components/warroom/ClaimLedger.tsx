@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Claim, ClaimStatus, FactCheck, PrimarySourceResults } from '../../types';
+import { Claim, ClaimStatus, FactCheck, PrimarySourceResults, ClusterCrossCheckResult } from '../../types';
 import { api } from '../../api/client';
 import { FactChecks } from '../radar/FactChecks';
 import { SupportVerdict } from '../studio/SupportVerdict';
-import { ListChecks, Trash2, ExternalLink, Plus, SearchCheck, ShieldCheck, Landmark, Check, ChevronDown } from 'lucide-react';
+import { ListChecks, Trash2, ExternalLink, Plus, SearchCheck, ShieldCheck, Landmark, Check, ChevronDown, Layers, AlertTriangle } from 'lucide-react';
 import { AI_DISABLED_HINT, useFeatures } from '../../features';
 
 // One-click verdicts are offered only where the AI's verified quotes point clearly one way.
@@ -28,8 +28,18 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
   const [aiChecking, setAiChecking] = useState<string | null>(null);
   const [finding, setFinding] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState<string | null>(null);
+  const [crossChecks, setCrossChecks] = useState<Record<string, ClusterCrossCheckResult>>({});
+  const [crossChecking, setCrossChecking] = useState<string | null>(null);
   const features = useFeatures();
   const [primary, setPrimary] = useState<Record<string, PrimarySourceResults>>({});
+
+  const runCrossCheck = (claim: Claim) => {
+    setCrossChecking(claim.id);
+    run(async () => {
+      const res = await api.crosscheckClaim(projectId, claim.id);
+      setCrossChecks((prev) => ({ ...prev, [claim.id]: res }));
+    }).finally(() => setCrossChecking(null));
+  };
 
   const findPrimarySources = (claim: Claim) => {
     setFinding(claim.id);
@@ -310,6 +320,14 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
                     <SearchCheck className="w-3.5 h-3.5" />
                     <span>{factCheckOpen === claim.id ? 'Hide fact-checks' : 'Search published fact-checks'}</span>
                   </button>
+                  <button
+                    onClick={() => runCrossCheck(claim)}
+                    disabled={crossChecking !== null}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-slate-800 hover:bg-slate-700 text-purple-300 border border-slate-700 transition disabled:opacity-50"
+                  >
+                    <Layers className={`w-3.5 h-3.5 ${crossChecking === claim.id ? 'animate-pulse' : ''}`} />
+                    <span>{crossChecking === claim.id ? 'Cross-checking...' : 'Cross-check cluster'}</span>
+                  </button>
                 </div>
               {primary[claim.id] && (
                 <div className="p-3 rounded-lg bg-slate-900/70 border border-slate-800 space-y-2">
@@ -354,6 +372,62 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
                     onAdd={(fc) => addFactCheckEvidence(claim, fc)}
                     addedUrls={claim.evidence.map((e) => e.url)}
                   />
+                )}
+
+                {crossChecks[claim.id] && (
+                  <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase border ${
+                            crossChecks[claim.id].status === 'broad_consensus' || crossChecks[claim.id].status === 'corroborated'
+                              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                              : crossChecks[claim.id].status === 'disputed'
+                              ? 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+                              : 'bg-slate-800 text-slate-300 border-slate-700'
+                          }`}
+                        >
+                          {crossChecks[claim.id].status.replace('_', ' ')}
+                        </span>
+                        <span className="text-[11px] text-slate-300 font-medium">
+                          {crossChecks[claim.id].summary}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-500">
+                        {crossChecks[claim.id].total_checked} articles checked
+                      </span>
+                    </div>
+
+                    {crossChecks[claim.id].disputing.length > 0 && (
+                      <div className="space-y-1 pt-1">
+                        <div className="text-[10px] font-mono font-bold uppercase text-rose-400 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" />
+                          <span>Conflicting Outlets / Denials:</span>
+                        </div>
+                        {crossChecks[claim.id].disputing.map((d, i) => (
+                          <div key={i} className="text-xs p-2 rounded bg-rose-950/30 border border-rose-900/50 text-rose-200">
+                            <span className="font-semibold text-rose-300">[{d.outlet}]</span> {d.title}
+                            {d.reason && <p className="text-[10px] text-rose-400 mt-0.5">⚠️ {d.reason}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {crossChecks[claim.id].supporting.length > 0 && (
+                      <div className="space-y-1 pt-1">
+                        <div className="text-[10px] font-mono font-bold uppercase text-emerald-400">
+                          Corroborating Outlets:
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          {crossChecks[claim.id].supporting.map((s, i) => (
+                            <div key={i} className="text-xs p-2 rounded bg-slate-950/60 border border-slate-800/80 text-slate-300 truncate">
+                              <span className="font-semibold text-cyan-400">[{s.outlet}]</span> {s.title}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
             <form
               onSubmit={(e) => {

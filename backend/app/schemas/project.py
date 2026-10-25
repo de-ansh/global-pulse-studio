@@ -192,3 +192,26 @@ class ProjectSourceSheetResponse(BaseModel):
     sources: List[Dict[str, Any]] = []
     markdown: str
 
+
+class ClusterCrossCheckArticle(BaseModel):
+    id: str
+    title: str
+    outlet: str
+    url: Optional[str] = None
+    overlap_ratio: float = 0.0
+    matched_terms: List[str] = []
+    reason: Optional[str] = None
+
+
+class ClusterCrossCheckResponse(BaseModel):
+    claim_id: Optional[str] = None
+    claim_text: str
+    cluster_id: Optional[str] = None
+    status: str  # "broad_consensus" | "corroborated" | "disputed" | "isolated_claim" | "unaddressed"
+    summary: str
+    supporting: List[ClusterCrossCheckArticle] = []
+    disputing: List[ClusterCrossCheckArticle] = []
+    silent_count: int
+    total_checked: int
+
+

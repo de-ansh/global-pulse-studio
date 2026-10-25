@@ -15,6 +15,7 @@ import {
   ClaimStatus,
   ProjectReadiness,
   ProjectSourceSheet,
+  ClusterCrossCheckResult,
 } from '../types';
 
 const API_BASE = '/api';
@@ -304,5 +305,13 @@ export const api = {
   async getSourceSheet(projectId: string): Promise<ProjectSourceSheet> {
     const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/source-sheet`);
     return handleResponse<ProjectSourceSheet>(res);
+  },
+
+  async crosscheckClaim(projectId: string, claimId: string): Promise<ClusterCrossCheckResult> {
+    const res = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(projectId)}/claims/${encodeURIComponent(claimId)}/crosscheck`,
+      { method: 'POST' }
+    );
+    return handleResponse<ClusterCrossCheckResult>(res);
   },
 };

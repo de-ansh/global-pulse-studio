@@ -31,6 +31,7 @@ from app.schemas.project import (
     ReadinessChecklistItem,
     ProjectSourceSheetResponse,
     SourceSheetCitation,
+    ClusterCrossCheckResponse,
 )
 from app.services import scriptwriter, sourcefinder, verifier
 from app.services.clusterer import tokenize_title
@@ -364,6 +365,44 @@ async def check_claim(project_id: str, claim_id: str, db: AsyncSession = Depends
     await db.commit()
     await db.refresh(claim)
     return claim
+
+
+@router.post("/{project_id}/claims/{claim_id}/crosscheck", response_model=ClusterCrossCheckResponse)
+async def crosscheck_claim_cluster(project_id: str, claim_id: str, db: AsyncSession = Depends(get_db)):
+    """Cross-examine a claim against all articles ingested in the crisis cluster."""
+    project = await _get_project_or_404(db, project_id)
+    claim = await _get_claim_or_404(db, project_id, claim_id)
+
+    articles = []
+    if project.cluster_id:
+        res = await db.execute(select(Article).where(Article.cluster_id == project.cluster_id))
+        articles = list(res.scalars().all())
+
+    # Fallback to script sources if project was created manually without cluster_id
+    if not articles and project.script and project.script.sources:
+        art_dicts = [
+            {"id": s.get("id"), "title": s.get("title", ""), "summary": "", "text": s.get("text", ""), "outlet": s.get("outlet", "Source"), "url": s.get("url")}
+            for s in project.script.sources if s.get("kind") == "article"
+        ]
+    else:
+        art_dicts = [
+            {"id": a.id, "title": a.title or "", "summary": a.summary or "", "text": a.clean_text or "", "outlet": a.source_id, "url": a.url}
+            for a in articles
+        ]
+
+    result = verifier.crosscheck_claim_against_articles(claim.text, art_dicts)
+
+    return ClusterCrossCheckResponse(
+        claim_id=claim.id,
+        claim_text=claim.text,
+        cluster_id=project.cluster_id,
+        status=result["status"],
+        summary=result["summary"],
+        supporting=result["supporting"],
+        disputing=result["disputing"],
+        silent_count=result["silent_count"],
+        total_checked=result["total_checked"],
+    )
 
 
 @router.post("/{project_id}/angles", response_model=List[NarrativeAngleOption])

@@ -340,3 +340,25 @@ export interface ProjectSourceSheet {
   markdown: string;
 }
 
+export interface ClusterCrossCheckArticle {
+  id: string;
+  title: string;
+  outlet: string;
+  url?: string | null;
+  overlap_ratio: number;
+  matched_terms: string[];
+  reason?: string | null;
+}
+
+export interface ClusterCrossCheckResult {
+  claim_id?: string | null;
+  claim_text: string;
+  cluster_id?: string | null;
+  status: 'broad_consensus' | 'corroborated' | 'disputed' | 'isolated_claim' | 'unaddressed' | string;
+  summary: string;
+  supporting: ClusterCrossCheckArticle[];
+  disputing: ClusterCrossCheckArticle[];
+  silent_count: number;
+  total_checked: number;
+}
+

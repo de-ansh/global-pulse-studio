@@ -420,3 +420,107 @@ def classify_epistemic_stance(text: str) -> Dict[str, Any]:
     }
 
 
+def crosscheck_claim_against_articles(claim_text: str, articles: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Cross-examine a claim against all articles ingested in a crisis cluster.
+    
+    Identifies multi-outlet consensus, conflicting reports, denials, or silence.
+    """
+    from app.services.clusterer import tokenize_title
+    c_text = (claim_text or "").strip()
+    c_tokens = tokenize_title(c_text)
+    claim_metrics = extract_numerical_metrics(c_text)
+
+    supporting = []
+    disputing = []
+    silent_ids = []
+
+    for art in articles or []:
+        art_id = art.get("id") or str(id(art))
+        outlet = art.get("outlet") or art.get("source_id") or "Unknown Outlet"
+        title = art.get("title") or ""
+        summary = art.get("summary") or ""
+        full_text = art.get("text") or ""
+        combined = f"{title} {summary} {full_text}"
+        norm_combined = _normalize(combined)
+
+        if not norm_combined or not c_tokens:
+            silent_ids.append(art_id)
+            continue
+
+        art_tokens = tokenize_title(f"{title} {summary}")
+        # If body text exists, also consider its tokens
+        if full_text:
+            art_tokens = art_tokens.union(tokenize_title(full_text[:1000]))
+
+        intersection = c_tokens.intersection(art_tokens)
+        overlap_ratio = len(intersection) / max(1, len(c_tokens))
+
+        # Check denial/refutation keywords
+        has_denial = bool(
+            re.search(
+                r"\b(?:denies|denied|refutes?|refuted|disputes?|disputed|untrue|false|fabricated|hoax|no evidence)\b",
+                norm_combined,
+            )
+        )
+
+        # Check metric discrepancies
+        art_metrics = extract_numerical_metrics(combined)
+        metric_conflict = False
+        if claim_metrics:
+            for cm in claim_metrics:
+                if cm["kind"] == "quantity":
+                    for am in art_metrics:
+                        if am["kind"] == "quantity" and am["raw"] != cm["raw"]:
+                            c_unit = re.sub(r"[\d,\.]", "", cm["raw"]).strip()
+                            a_unit = re.sub(r"[\d,\.]", "", am["raw"]).strip()
+                            if c_unit and c_unit == a_unit:
+                                metric_conflict = True
+
+        # Relevant article threshold: at least 2 tokens matched and ratio >= 0.25 (or 1 token if claim is short)
+        is_relevant = (len(intersection) >= 2 and overlap_ratio >= 0.25) or (len(c_tokens) <= 2 and len(intersection) >= 1)
+
+        if is_relevant:
+            entry = {
+                "id": art_id,
+                "title": title,
+                "outlet": outlet,
+                "url": art.get("url"),
+                "overlap_ratio": round(overlap_ratio, 2),
+                "matched_terms": list(intersection)[:5],
+            }
+            if has_denial or metric_conflict:
+                entry["reason"] = "Denial/refutation reported" if has_denial else "Conflicting metric reported"
+                disputing.append(entry)
+            else:
+                supporting.append(entry)
+        else:
+            silent_ids.append(art_id)
+
+    # Determine consensus status
+    if len(disputing) > 0:
+        status = "disputed"
+        summary = f"Disputed: {len(disputing)} outlet(s) report denials or conflicting details while {len(supporting)} support."
+    elif len(supporting) >= 3:
+        status = "broad_consensus"
+        summary = f"Broad consensus: corroborated across {len(supporting)} independent articles in cluster."
+    elif len(supporting) == 2:
+        status = "corroborated"
+        summary = f"Corroborated: reported by {len(supporting)} outlets in cluster."
+    elif len(supporting) == 1:
+        status = "isolated_claim"
+        summary = f"Isolated claim: reported by only 1 outlet ({supporting[0]['outlet']}) in cluster."
+    else:
+        status = "unaddressed"
+        summary = "Unaddressed: claim not mentioned in current cluster articles."
+
+    return {
+        "status": status,
+        "summary": summary,
+        "supporting": supporting,
+        "disputing": disputing,
+        "silent_count": len(silent_ids),
+        "total_checked": len(articles or []),
+    }
+
+
+
