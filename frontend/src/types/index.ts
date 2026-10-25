@@ -1,9 +1,12 @@
+export type GovernanceType = 'commercial_wire' | 'state_controlled' | 'public_broadcaster' | 'independent_investigative';
+
 export interface Source {
   id: string;
   name: string;
   feed_url: string;
   homepage_url?: string | null;
   source_type: string;
+  governance_type?: GovernanceType | string;
   region: string;
   bias_category?: string | null;
   reliability_score: number;
@@ -19,6 +22,7 @@ export interface SourceCreate {
   feed_url: string;
   homepage_url?: string;
   source_type?: string;
+  governance_type?: string;
   region?: string;
   bias_category?: string | null;
   reliability_score?: number;

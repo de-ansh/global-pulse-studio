@@ -29,6 +29,7 @@ class Source(Base):
     feed_url: Mapped[str] = mapped_column(String(512), nullable=False, unique=True)
     homepage_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     source_type: Mapped[str] = mapped_column(String(32), default="wire")  # wire, think_tank, gov, independent
+    governance_type: Mapped[str] = mapped_column(String(32), default="commercial_wire")  # commercial_wire, state_controlled, public_broadcaster, independent_investigative
     region: Mapped[str] = mapped_column(String(64), default="Global")
     bias_category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     reliability_score: Mapped[float] = mapped_column(Float, default=0.85)

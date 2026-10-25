@@ -9,6 +9,7 @@ class SourceBase(BaseModel):
     feed_url: str
     homepage_url: Optional[str] = None
     source_type: str = "wire"
+    governance_type: str = "commercial_wire"
     region: str = "Global"
     bias_category: Optional[str] = None
     reliability_score: float = 0.85
@@ -35,6 +36,7 @@ class SourceUpdate(BaseModel):
     feed_url: Optional[str] = None
     homepage_url: Optional[str] = None
     source_type: Optional[str] = None
+    governance_type: Optional[str] = None
     region: Optional[str] = None
     bias_category: Optional[str] = None
     reliability_score: Optional[float] = Field(None, ge=0.0, le=1.0)

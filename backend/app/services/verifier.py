@@ -523,4 +523,37 @@ def crosscheck_claim_against_articles(claim_text: str, articles: List[Dict[str, 
     }
 
 
+def evaluate_source_governance_risk(sources: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Evaluate whether corroborating sources are dominated by state-controlled media."""
+    if not sources:
+        return {"risk_level": "none", "state_controlled_count": 0, "total_sources": 0, "warning": None}
+
+    total = len(sources)
+    state_controlled = [s for s in sources if s.get("governance_type") == "state_controlled"]
+    state_count = len(state_controlled)
+
+    if state_count == total and total > 0:
+        return {
+            "risk_level": "high",
+            "state_controlled_count": state_count,
+            "total_sources": total,
+            "warning": "Solely state-controlled media: all corroborating sources are state-directed. Attribute explicitly in video script.",
+        }
+    elif state_count > 0:
+        return {
+            "risk_level": "mixed",
+            "state_controlled_count": state_count,
+            "total_sources": total,
+            "warning": f"Includes {state_count} state-controlled source(s). Verify against commercial wires or independent monitors.",
+        }
+
+    return {
+        "risk_level": "low",
+        "state_controlled_count": 0,
+        "total_sources": total,
+        "warning": None,
+    }
+
+
+
 

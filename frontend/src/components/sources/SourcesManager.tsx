@@ -155,11 +155,26 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                       </span>
                     </td>
 
-                    {/* Type */}
+                    {/* Type & Governance */}
                     <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-800/40 text-[11px] uppercase">
-                        {src.source_type}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className="px-2 py-0.5 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-800/40 text-[11px] uppercase w-fit">
+                          {src.source_type}
+                        </span>
+                        {src.governance_type === 'state_controlled' ? (
+                          <span className="px-1.5 py-0.5 rounded bg-rose-950/60 text-rose-300 border border-rose-800/40 text-[9px] font-bold uppercase w-fit" title="State-controlled editorial board">
+                            State Media
+                          </span>
+                        ) : src.governance_type === 'public_broadcaster' ? (
+                          <span className="px-1.5 py-0.5 rounded bg-blue-950/60 text-blue-300 border border-blue-800/40 text-[9px] font-bold uppercase w-fit">
+                            Public
+                          </span>
+                        ) : src.governance_type === 'independent_investigative' ? (
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/40 text-[9px] font-bold uppercase w-fit">
+                            Investigative
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
 
                     {/* Reliability */}
