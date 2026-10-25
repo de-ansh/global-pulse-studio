@@ -16,6 +16,7 @@ import {
   ProjectReadiness,
   ProjectSourceSheet,
   ClusterCrossCheckResult,
+  ClaimCacheMatch,
 } from '../types';
 
 const API_BASE = '/api';
@@ -313,5 +314,20 @@ export const api = {
       { method: 'POST' }
     );
     return handleResponse<ClusterCrossCheckResult>(res);
+  },
+
+  async getClaimCacheMatch(projectId: string, claimId: string): Promise<ClaimCacheMatch> {
+    const res = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(projectId)}/claims/${encodeURIComponent(claimId)}/cache-match`
+    );
+    return handleResponse<ClaimCacheMatch>(res);
+  },
+
+  async applyClaimCache(projectId: string, claimId: string): Promise<Claim> {
+    const res = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(projectId)}/claims/${encodeURIComponent(claimId)}/apply-cache`,
+      { method: 'POST' }
+    );
+    return handleResponse<Claim>(res);
   },
 };

@@ -1,5 +1,6 @@
 """Projects router managing video essay workspaces, dossiers, and story outlines."""
 import copy
+import hashlib
 import re
 import uuid
 from typing import List, Optional
@@ -12,7 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import get_db
-from app.models.project import Project, Dossier, ScriptOutline, Claim, ClaimCheck, Script
+from app.models.project import Project, Dossier, ScriptOutline, Claim, ClaimCheck, Script, VerifiedClaimCache
 from app.models.event import EventCluster
 from app.models.source import Article
 from app.schemas.project import (
@@ -32,6 +33,7 @@ from app.schemas.project import (
     ProjectSourceSheetResponse,
     SourceSheetCitation,
     ClusterCrossCheckResponse,
+    ClaimCacheMatchResponse,
 )
 from app.services import scriptwriter, sourcefinder, verifier
 from app.services.clusterer import tokenize_title
@@ -225,6 +227,26 @@ async def update_claim(project_id: str, claim_id: str, payload: ClaimUpdate, db:
     if payload.status is not None and payload.status != claim.status:
         claim.status = payload.status
         claim.status_changed_at = datetime.now(timezone.utc)
+        if claim.status in {"confirmed", "disputed", "false"}:
+            c_hash = hashlib.sha256(verifier._normalize(claim.text).encode("utf-8")).hexdigest()
+            cached = await db.get(VerifiedClaimCache, c_hash)
+            if not cached:
+                cached = VerifiedClaimCache(
+                    canonical_hash=c_hash,
+                    claim_text=claim.text,
+                    status=claim.status,
+                    epistemic_level=claim.epistemic_level,
+                    attributed_to=claim.attributed_to,
+                    evidence=claim.evidence or [],
+                    verified_in_project_id=project_id,
+                )
+                db.add(cached)
+            else:
+                cached.status = claim.status
+                cached.epistemic_level = claim.epistemic_level
+                cached.attributed_to = claim.attributed_to
+                cached.evidence = claim.evidence or []
+                cached.verified_in_project_id = project_id
     await db.commit()
     await db.refresh(claim)
     return claim
@@ -250,6 +272,53 @@ async def get_claim_fact_checks(project_id: str, claim_id: str, db: AsyncSession
             region = cluster.region
     actors, chokepoints, _ = extract_entities_and_chokepoints(claim.text)
     return await find_fact_checks(claim.text, actors + chokepoints, region=region)
+
+
+@router.get("/{project_id}/claims/{claim_id}/cache-match", response_model=ClaimCacheMatchResponse)
+async def get_claim_cache_match(project_id: str, claim_id: str, db: AsyncSession = Depends(get_db)):
+    """Check if a claim was already verified or debunked in a prior project."""
+    claim = await _get_claim_or_404(db, project_id, claim_id)
+    c_hash = hashlib.sha256(verifier._normalize(claim.text).encode("utf-8")).hexdigest()
+    cached = await db.get(VerifiedClaimCache, c_hash)
+    if cached and cached.verified_in_project_id != project_id:
+        return ClaimCacheMatchResponse(
+            has_match=True,
+            canonical_hash=cached.canonical_hash,
+            claim_text=cached.claim_text,
+            status=cached.status,
+            epistemic_level=cached.epistemic_level,
+            attributed_to=cached.attributed_to,
+            evidence=cached.evidence or [],
+            verified_in_project_id=cached.verified_in_project_id,
+            message=f"Previously verified as '{cached.status.upper()}' in project {cached.verified_in_project_id}.",
+        )
+    return ClaimCacheMatchResponse(has_match=False, message="No prior verification found in cache.")
+
+
+@router.post("/{project_id}/claims/{claim_id}/apply-cache", response_model=ClaimResponse)
+async def apply_cached_claim_verification(project_id: str, claim_id: str, db: AsyncSession = Depends(get_db)):
+    """Apply cached verdict and evidence from a prior project's verification."""
+    claim = await _get_claim_or_404(db, project_id, claim_id)
+    c_hash = hashlib.sha256(verifier._normalize(claim.text).encode("utf-8")).hexdigest()
+    cached = await db.get(VerifiedClaimCache, c_hash)
+    if not cached:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No cached verification found.")
+    claim.status = cached.status
+    claim.status_changed_at = datetime.now(timezone.utc)
+    if cached.epistemic_level:
+        claim.epistemic_level = cached.epistemic_level
+    if cached.attributed_to:
+        claim.attributed_to = cached.attributed_to
+    if cached.evidence:
+        existing_urls = {e.get("url") for e in claim.evidence or []}
+        new_evidence = list(claim.evidence or [])
+        for ev in cached.evidence:
+            if ev.get("url") not in existing_urls:
+                new_evidence.append(ev)
+        claim.evidence = new_evidence
+    await db.commit()
+    await db.refresh(claim)
+    return claim
 
 
 CLAIM_CHECK_MAX_ARTICLES = 10

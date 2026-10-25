@@ -216,3 +216,16 @@ class ClusterCrossCheckResponse(BaseModel):
     superseded_warning: Optional[str] = None
 
 
+class ClaimCacheMatchResponse(BaseModel):
+    has_match: bool
+    canonical_hash: Optional[str] = None
+    claim_text: Optional[str] = None
+    status: Optional[str] = None
+    epistemic_level: Optional[str] = None
+    attributed_to: Optional[str] = None
+    evidence: List[Dict[str, Any]] = []
+    verified_in_project_id: Optional[str] = None
+    message: Optional[str] = None
+
+
+

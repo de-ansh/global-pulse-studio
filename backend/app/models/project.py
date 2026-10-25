@@ -124,3 +124,18 @@ class Script(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     project: Mapped["Project"] = relationship("Project", back_populates="script")
+
+
+class VerifiedClaimCache(Base):
+    """Cross-project cache of verified or debunked claims to avoid re-researching identical assertions."""
+    __tablename__ = "verified_claim_cache"
+
+    canonical_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    claim_text: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)  # confirmed, disputed, false
+    epistemic_level: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    attributed_to: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    evidence: Mapped[list] = mapped_column(JSON, default=list)
+    verified_in_project_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+

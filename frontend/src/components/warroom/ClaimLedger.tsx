@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Claim, ClaimStatus, FactCheck, PrimarySourceResults, ClusterCrossCheckResult } from '../../types';
+import { Claim, ClaimStatus, FactCheck, PrimarySourceResults, ClusterCrossCheckResult, ClaimCacheMatch } from '../../types';
 import { api } from '../../api/client';
 import { FactChecks } from '../radar/FactChecks';
 import { SupportVerdict } from '../studio/SupportVerdict';
@@ -30,8 +30,23 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
   const [moreOpen, setMoreOpen] = useState<string | null>(null);
   const [crossChecks, setCrossChecks] = useState<Record<string, ClusterCrossCheckResult>>({});
   const [crossChecking, setCrossChecking] = useState<string | null>(null);
+  const [cacheMatches, setCacheMatches] = useState<Record<string, ClaimCacheMatch>>({});
+  const [applyingCache, setApplyingCache] = useState<string | null>(null);
   const features = useFeatures();
   const [primary, setPrimary] = useState<Record<string, PrimarySourceResults>>({});
+
+  const applyCache = (claim: Claim) => {
+    setApplyingCache(claim.id);
+    run(async () => {
+      const updated = await api.applyClaimCache(projectId, claim.id);
+      replace(updated);
+      setCacheMatches((prev) => {
+        const next = { ...prev };
+        delete next[claim.id];
+        return next;
+      });
+    }).finally(() => setApplyingCache(null));
+  };
 
   const runCrossCheck = (claim: Claim) => {
     setCrossChecking(claim.id);
@@ -61,7 +76,18 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
 
   useEffect(() => {
     setError(null);
-    api.getClaims(projectId).then(setClaims).catch((err) => setError(err.message));
+    api.getClaims(projectId).then((loaded) => {
+      setClaims(loaded);
+      for (const c of loaded) {
+        if (c.status === 'unverified') {
+          api.getClaimCacheMatch(projectId, c.id).then((m) => {
+            if (m.has_match) {
+              setCacheMatches((prev) => ({ ...prev, [c.id]: m }));
+            }
+          }).catch(() => {});
+        }
+      }
+    }).catch((err) => setError(err.message));
   }, [projectId]);
 
   const run = async (action: () => Promise<void>) => {
@@ -218,6 +244,27 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
               <p className="text-[10px] font-mono text-slate-500">
                 Verdict set {new Date(claim.status_changed_at).toLocaleString()}
               </p>
+            )}
+
+            {/* Prior Project Verification Memory Match */}
+            {cacheMatches[claim.id]?.has_match && (
+              <div className="p-2.5 rounded-lg bg-indigo-950/40 border border-indigo-800/50 text-indigo-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[9px] font-bold uppercase shrink-0">
+                    Memory Match
+                  </span>
+                  <span className="text-[11px] leading-tight">
+                    Already verified as <strong className="text-white uppercase">{cacheMatches[claim.id].status}</strong> in prior research ({cacheMatches[claim.id].evidence?.length || 0} evidence links)
+                  </span>
+                </div>
+                <button
+                  onClick={() => applyCache(claim)}
+                  disabled={applyingCache === claim.id}
+                  className="shrink-0 px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-sm"
+                >
+                  {applyingCache === claim.id ? 'Applying...' : 'Apply Prior Verdict'}
+                </button>
+              </div>
             )}
 
             {claim.evidence.length > 0 && (

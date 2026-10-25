@@ -367,3 +367,15 @@ export interface ClusterCrossCheckResult {
   superseded_warning?: string | null;
 }
 
+export interface ClaimCacheMatch {
+  has_match: boolean;
+  canonical_hash?: string | null;
+  claim_text?: string | null;
+  status?: ClaimStatus | string | null;
+  epistemic_level?: string | null;
+  attributed_to?: string | null;
+  evidence?: ClaimEvidence[];
+  verified_in_project_id?: string | null;
+  message?: string | null;
+}
+
