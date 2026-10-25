@@ -39,11 +39,15 @@ class ClaimEvidence(BaseModel):
 class ClaimCreate(BaseModel):
     text: str = Field(..., min_length=1, max_length=1000)
     evidence: List[ClaimEvidence] = []
+    epistemic_level: Optional[str] = None
+    attributed_to: Optional[str] = None
 
 
 class ClaimUpdate(BaseModel):
     text: Optional[str] = Field(None, min_length=1, max_length=1000)
     status: Optional[ClaimStatus] = None
+    epistemic_level: Optional[str] = None
+    attributed_to: Optional[str] = None
     note: Optional[str] = Field(None, max_length=4000)
     evidence: Optional[List[ClaimEvidence]] = None
 
@@ -65,6 +69,8 @@ class ClaimResponse(BaseModel):
     project_id: str
     text: str
     status: ClaimStatus
+    epistemic_level: Optional[str] = "empirical_event"
+    attributed_to: Optional[str] = None
     note: Optional[str] = None
     evidence: List[Dict[str, Any]] = []
     created_at: datetime

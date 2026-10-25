@@ -81,6 +81,8 @@ class Claim(Base):
 
     text: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(16), default="unverified")  # unverified, confirmed, disputed, false
+    epistemic_level: Mapped[Optional[str]] = mapped_column(String(32), default="empirical_event", nullable=True)
+    attributed_to: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     evidence: Mapped[list] = mapped_column(JSON, default=list)  # [{"url": ..., "label": ...}]
 

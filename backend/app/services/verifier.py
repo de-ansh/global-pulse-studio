@@ -325,3 +325,98 @@ def check_numerical_consistency(statement: str, source_texts: List[str]) -> Dict
         "warning": warning,
     }
 
+
+EPISTEMIC_LEVELS = [
+    "empirical_event",
+    "official_attribution",
+    "unattributed_rumor",
+    "analysis_or_opinion",
+]
+
+
+def classify_epistemic_stance(text: str) -> Dict[str, Any]:
+    """Classify the epistemic certainty of a claim (reported speech vs empirical fact vs rumor).
+    
+    Prevents presenting belligerent or official claims as uncontested physical reality.
+    """
+    t = (text or "").strip()
+    if not t:
+        return {
+            "level": "empirical_event",
+            "attributed_to": None,
+            "editorial_guidance": "Empty claim statement.",
+        }
+
+    # 1. Check rumors / unverified internet circulating claims
+    rumor_patterns = [
+        r"\b(?:unconfirmed reports?|reports? circulating|sources? claim|sources? say|rumors? suggest|"
+        r"social media (?:clips?|posts?|videos?)|unverified (?:footage|claims?|reports?)|allegedly|purportedly)\b"
+    ]
+    for pat in rumor_patterns:
+        if re.search(pat, t, re.IGNORECASE):
+            return {
+                "level": "unattributed_rumor",
+                "attributed_to": None,
+                "editorial_guidance": "Unattributed rumor: independent corroboration or physical evidence required before recording.",
+            }
+
+    # 2. Check opinion / speculative analytical projections
+    opinion_patterns = [
+        r"\b(?:analysts? (?:believe|argue|estimate|predict)|experts? (?:warn|suggest)|"
+        r"likely to|could lead to|may indicate|signals? a potential|speculation)\b"
+    ]
+    for pat in opinion_patterns:
+        if re.search(pat, t, re.IGNORECASE):
+            return {
+                "level": "analysis_or_opinion",
+                "attributed_to": None,
+                "editorial_guidance": "Analytical projection or opinion: frame as assessment rather than established historical fact.",
+            }
+
+    # 3. Check official attribution
+    # Pattern A: "According to X, ..." or "As per X, ..."
+    m_acc = re.search(r"\b(?:according to|as per)\s+([^,.;]{2,50})", t, re.IGNORECASE)
+    if m_acc:
+        actor = m_acc.group(1).strip()
+        return {
+            "level": "official_attribution",
+            "attributed_to": actor,
+            "editorial_guidance": f"Attributed statement: narrate as claimed by {actor}, not uncontested physical reality.",
+        }
+
+    # Pattern B: "[Actor] claimed/stated/asserted..."
+    m_state = re.search(
+        r"\b([A-Z][A-Za-z0-9\s\.-]{2,40}?)\s+(?:claims?|claimed|states?|stated|alleg(?:es?|ed)|asserts?|asserted|announced|insisted|threatened|denies|denied)\b",
+        t,
+    )
+    if m_state:
+        actor = m_state.group(1).strip()
+        if actor.lower() not in {"this", "that", "which", "there", "it"}:
+            return {
+                "level": "official_attribution",
+                "attributed_to": actor,
+                "editorial_guidance": f"Attributed statement: narrate as claimed by {actor}, not uncontested physical reality.",
+            }
+
+    # Pattern C: spokesperson / officials said
+    m_spox = re.search(
+        r"\b((?:[A-Za-z\s]+)?(?:spokesperson|officials?|ministry|military|command))\s+(?:said|stated|reported)\b",
+        t,
+        re.IGNORECASE,
+    )
+    if m_spox:
+        actor = m_spox.group(1).strip().title()
+        return {
+            "level": "official_attribution",
+            "attributed_to": actor,
+            "editorial_guidance": f"Attributed statement: narrate as claimed by {actor}, not uncontested physical reality.",
+        }
+
+    # 4. Default: Empirical event
+    return {
+        "level": "empirical_event",
+        "attributed_to": None,
+        "editorial_guidance": "Empirical observation or direct event description.",
+    }
+
+

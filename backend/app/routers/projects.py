@@ -178,11 +178,17 @@ async def create_claim(project_id: str, payload: ClaimCreate, db: AsyncSession =
             d["archive_url"] = verifier.generate_archive_url(str(d["url"]))
         evidence_data.append(d)
 
+    stance = verifier.classify_epistemic_stance(payload.text)
+    epistemic_level = payload.epistemic_level or stance["level"]
+    attributed_to = payload.attributed_to or stance["attributed_to"]
+
     claim = Claim(
         id=f"clm_{uuid.uuid4().hex[:12]}",
         project_id=project_id,
         text=payload.text.strip(),
         status="unverified",
+        epistemic_level=epistemic_level,
+        attributed_to=attributed_to,
         evidence=evidence_data,
     )
     db.add(claim)
@@ -197,6 +203,14 @@ async def update_claim(project_id: str, claim_id: str, payload: ClaimUpdate, db:
     claim = await _get_claim_or_404(db, project_id, claim_id)
     if payload.text is not None:
         claim.text = payload.text.strip()
+        if payload.epistemic_level is None:
+            stance = verifier.classify_epistemic_stance(claim.text)
+            claim.epistemic_level = stance["level"]
+            claim.attributed_to = stance["attributed_to"]
+    if payload.epistemic_level is not None:
+        claim.epistemic_level = payload.epistemic_level
+    if payload.attributed_to is not None:
+        claim.attributed_to = payload.attributed_to
     if payload.note is not None:
         claim.note = payload.note
     if payload.evidence is not None:
@@ -259,11 +273,14 @@ async def extract_claims_from_script(project_id: str, db: AsyncSession = Depends
     extracted = await verifier.extract_claims(lines, [c.text for c in existing])
     created = []
     for item in extracted:
+        stance = verifier.classify_epistemic_stance(item["text"])
         claim = Claim(
             id=f"clm_{uuid.uuid4().hex[:12]}",
             project_id=project_id,
             text=item["text"],
             status="unverified",
+            epistemic_level=stance["level"],
+            attributed_to=stance["attributed_to"],
             note=f"Extracted from script line {item['line_id']}.",
             evidence=[{"url": a["url"], "label": f"Cited in script [{a['id']}]: {a['title']}"[:200]} for a in line_articles[item["line_id"]]],
         )

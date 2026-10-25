@@ -141,7 +141,38 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
         {claims.map((claim) => (
           <div key={claim.id} className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-3">
             <div className="flex items-start gap-3">
-              <p className="flex-1 text-sm text-slate-100">{claim.text}</p>
+              <div className="flex-1 space-y-1">
+                <p className="text-sm text-slate-100">{claim.text}</p>
+                {/* Epistemic Stance Indicator */}
+                {claim.epistemic_level === 'official_attribution' ? (
+                  <div className="flex items-center gap-1.5 text-[11px] font-mono text-purple-300">
+                    <span className="px-2 py-0.5 rounded bg-purple-950/60 border border-purple-800/50 font-semibold uppercase">
+                      Attributed Speech
+                    </span>
+                    <span className="text-slate-400">
+                      {claim.attributed_to ? `Claimed by: ${claim.attributed_to}` : 'Official statement (maintain attribution in script)'}
+                    </span>
+                  </div>
+                ) : claim.epistemic_level === 'unattributed_rumor' ? (
+                  <div className="flex items-center gap-1.5 text-[11px] font-mono text-amber-300">
+                    <span className="px-2 py-0.5 rounded bg-amber-950/60 border border-amber-800/50 font-semibold uppercase">
+                      Unconfirmed Rumor
+                    </span>
+                    <span className="text-amber-400/80">
+                      Anonymous or social media source; secondary corroboration required before script lock.
+                    </span>
+                  </div>
+                ) : claim.epistemic_level === 'analysis_or_opinion' ? (
+                  <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
+                    <span className="px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700/60 font-semibold uppercase">
+                      Assessment
+                    </span>
+                    <span className="text-slate-500">
+                      Analytical projection or opinion; narrate as viewpoint.
+                    </span>
+                  </div>
+                ) : null}
+              </div>
               <label className="sr-only" htmlFor={`status-${claim.id}`}>Verdict</label>
               <select
                 id={`status-${claim.id}`}

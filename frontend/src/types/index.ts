@@ -88,6 +88,7 @@ export interface FactCheck {
 }
 
 export type ClaimStatus = 'unverified' | 'confirmed' | 'disputed' | 'false';
+export type EpistemicLevel = 'empirical_event' | 'official_attribution' | 'unattributed_rumor' | 'analysis_or_opinion';
 
 export interface ClaimEvidence {
   url: string;
@@ -100,6 +101,8 @@ export interface Claim {
   project_id: string;
   text: string;
   status: ClaimStatus;
+  epistemic_level?: EpistemicLevel | string | null;
+  attributed_to?: string | null;
   note?: string | null;
   evidence: ClaimEvidence[];
   created_at: string;
