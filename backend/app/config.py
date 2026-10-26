@@ -159,6 +159,29 @@ class Settings(BaseSettings):
             "bias_category": "domestic_mainstream",
             "reliability_score": 0.88,
         },
+        # Dedicated Fact-Checking & Counter-Disinformation Feeds
+        {
+            "id": "pib_factcheck",
+            "name": "PIB Fact Check (Government of India)",
+            "feed_url": "https://pib.gov.in/RssMain.aspx?ModId=6",
+            "homepage_url": "https://factcheck.pib.gov.in",
+            "source_type": "factcheck",
+            "governance_type": "state_controlled",
+            "region": "India / South Asia",
+            "bias_category": "government_press_bureau",
+            "reliability_score": 0.95,
+        },
+        {
+            "id": "euvsdisinfo",
+            "name": "EUvsDisinfo (EEAS Disinformation Database)",
+            "feed_url": "https://euvsdisinfo.eu/feed/",
+            "homepage_url": "https://euvsdisinfo.eu",
+            "source_type": "factcheck",
+            "governance_type": "public_broadcaster",
+            "region": "Europe / Eurasia",
+            "bias_category": "institutional_counter_disinfo",
+            "reliability_score": 0.92,
+        },
     ]
 
 

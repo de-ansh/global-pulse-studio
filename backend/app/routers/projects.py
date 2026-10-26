@@ -271,7 +271,7 @@ async def get_claim_fact_checks(project_id: str, claim_id: str, db: AsyncSession
         if cluster:
             region = cluster.region
     actors, chokepoints, _ = extract_entities_and_chokepoints(claim.text)
-    return await find_fact_checks(claim.text, actors + chokepoints, region=region)
+    return await find_fact_checks(claim.text, actors + chokepoints, region=region, db=db)
 
 
 @router.get("/{project_id}/claims/{claim_id}/cache-match", response_model=ClaimCacheMatchResponse)

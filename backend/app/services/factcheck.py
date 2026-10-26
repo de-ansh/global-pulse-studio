@@ -2,12 +2,16 @@
 import asyncio
 import logging
 import re
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Optional
 
 import httpx
 from fastapi import HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config import settings
+from app.models.source import Source, Article
 from app.services import gemini
 
 logger = logging.getLogger(__name__)
@@ -224,12 +228,85 @@ def search_eudisinfo(query: str) -> List[Dict[str, Any]]:
     return hits
 
 
-async def find_fact_checks(statement: str, entities: Iterable[str] = (), region: str = None) -> List[Dict[str, Any]]:
-    """Multi-query search merged across Google Fact Check Tools API and regional debunk connectors."""
+async def search_ingested_factchecks(
+    db: AsyncSession,
+    query: str,
+    region: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Query recently ingested live fact-check reports from monitored intelligence feeds."""
+    tokens = set(re.findall(r"\w{3,}", (query or "").lower()))
+    if not tokens:
+        return []
+
+    stmt = (
+        select(Article)
+        .options(selectinload(Article.source))
+        .join(Source, Article.source_id == Source.id)
+        .where(
+            (Source.source_type == "factcheck")
+            | (Source.id.in_(["pib_factcheck", "euvsdisinfo"]))
+        )
+        .order_by(Article.published_at.desc())
+        .limit(100)
+    )
+    result = await db.execute(stmt)
+    articles = list(result.scalars().all())
+
+    hits = []
+    for art in articles:
+        text = f"{art.title} {art.summary or ''} {art.clean_text or ''}".lower()
+        matched = sum(1 for t in tokens if t in text)
+        if matched > 0:
+            fc_meta = (art.entities or {}).get("factcheck") if isinstance(art.entities, dict) else {}
+            rating = (fc_meta or {}).get("rating") or "Debunked"
+            claim_text = (fc_meta or {}).get("claim") or art.title
+            publisher = art.source.name if art.source else "Live Fact-Check Feed"
+
+            if region and art.source and art.source.region:
+                src_reg = art.source.region.lower()
+                reg_lower = region.lower()
+                if "global" not in src_reg and not any(r in src_reg for r in reg_lower.split() if len(r) > 3):
+                    continue
+
+            hits.append({
+                "claim": claim_text,
+                "claimant": publisher,
+                "claim_date": art.published_at.isoformat() if art.published_at else None,
+                "publisher": publisher,
+                "rating": rating,
+                "title": art.title,
+                "url": art.url,
+                "review_date": art.published_at.isoformat() if art.published_at else None,
+                "match_count": matched,
+            })
+
+    hits.sort(key=lambda x: x["match_count"], reverse=True)
+    return hits
+
+
+async def find_fact_checks(
+    statement: str,
+    entities: Iterable[str] = (),
+    region: Optional[str] = None,
+    db: Optional[AsyncSession] = None,
+) -> List[Dict[str, Any]]:
+    """Multi-query search merged across live ingested feeds, regional debunks, and Google Fact Check Tools API."""
     queries = fact_check_queries(statement, entities)
     merged, seen = [], set()
 
-    # 1. Query regional connectors first (always available without external API key)
+    # 1. Query live ingested fact-checks from DB if session provided
+    if db:
+        for q in queries or [statement]:
+            try:
+                ingested_hits = await search_ingested_factchecks(db, q, region=region)
+                for hit in ingested_hits:
+                    if hit["url"] not in seen:
+                        seen.add(hit["url"])
+                        merged.append(hit)
+            except Exception as exc:
+                logger.warning("Error querying ingested fact-checks: %s", exc)
+
+    # 2. Query static regional fallback connectors
     regional_rows: List[Dict[str, Any]] = []
     for q in queries or [statement]:
         if not region or "india" in region.lower() or "south asia" in region.lower():
@@ -242,7 +319,7 @@ async def find_fact_checks(statement: str, entities: Iterable[str] = (), region:
             seen.add(r["url"])
             merged.append(r)
 
-    # 2. Query Google Fact Check Tools API if key configured
+    # 3. Query Google Fact Check Tools API if key configured
     if settings.FACTCHECK_API_KEY and queries:
         try:
             batches = await asyncio.gather(*(search_fact_checks(q, settings.FACTCHECK_API_KEY) for q in queries))
@@ -259,7 +336,7 @@ async def find_fact_checks(statement: str, entities: Iterable[str] = (), region:
                 detail=f"Fact-check service error{f' (HTTP {code})' if code else ''}. Check the API key and try again.",
             )
     elif not merged and not settings.FACTCHECK_API_KEY:
-        # If no regional hits and no Google key, raise 503 so caller knows service is unconfigured
+        # If no hits and no Google key, raise 503 so caller knows service is unconfigured
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Fact-check lookup is not configured. Set GPS_FACTCHECK_API_KEY (Google Fact Check Tools API key) and restart.",

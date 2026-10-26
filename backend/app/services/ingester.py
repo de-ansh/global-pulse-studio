@@ -42,6 +42,70 @@ def compute_canonical_hash(url: str, title: str) -> str:
     return hashlib.sha256(f"{norm_url}::{norm_title}".encode("utf-8")).hexdigest()
 
 
+def extract_factcheck_metadata(
+    title: str,
+    summary: str,
+    source_type: str = "wire",
+    source_id: str = "",
+) -> Optional[Dict[str, Any]]:
+    """Extract debunk verdict, targeted claim, and rating from fact-check headlines/summaries."""
+    text = f"{title} {summary}"
+    text_lower = text.lower()
+
+    is_fc_source = source_type == "factcheck" or source_id in {"pib_factcheck", "euvsdisinfo"}
+    has_fc_cue = bool(
+        re.search(r"\b(fact[- ]check|factcheck|debunk|disinfo|fake news|claim vs fact)\b", text_lower)
+    )
+
+    if not (is_fc_source or has_fc_cue):
+        return None
+
+    # 1. Determine Rating: check title cues first, then body text
+    title_lower = title.lower()
+    rating = "Debunked"
+    for scope in (title_lower, text_lower):
+        if re.search(r"\b(fake|false|fabricated|bogus|hoax|untrue|disinfo|disinformation)\b", scope):
+            rating = "Fake"
+            break
+        elif re.search(r"\b(manipulated|altered|deepfake|doctored|morphed)\b", scope):
+            rating = "Manipulated Media"
+            break
+        elif re.search(r"\b(misleading|missing context|out of context|half[- ]true|unproven)\b", scope):
+            rating = "Misleading"
+            break
+        elif re.search(r"\b(clarification|correct|confirmed|true)\b", scope):
+            rating = "Clarification"
+            break
+
+    # 2. Extract targeted claim statement
+    claim_target = title
+    m_claim_fact = re.search(r"claim\s*:\s*(.+?)\s*(?:fact\s*:|verdict\s*:|$)", title, flags=re.IGNORECASE)
+    if m_claim_fact:
+        claim_target = m_claim_fact.group(1).strip()
+    else:
+        m_disinfo = re.search(r"^disinfo\s*:\s*(.+)$", title, flags=re.IGNORECASE)
+        if m_disinfo:
+            claim_target = m_disinfo.group(1).strip()
+        else:
+            m_fc = re.search(r"^(?:pib\s+)?fact\s*check\s*:\s*(.+?)(?:\s+is\s+(?:fake|false|misleading))?$", title, flags=re.IGNORECASE)
+            if m_fc:
+                claim_target = m_fc.group(1).strip()
+            else:
+                m_busts = re.search(r"(?:busts|debunks)\s+(?:fake|misleading)?\s*(.+)$", title, flags=re.IGNORECASE)
+                if m_busts:
+                    claim_target = m_busts.group(1).strip()
+
+    claim_target = re.sub(r"^[–—\-:\s]+|[–—\-:\s]+$", "", claim_target).strip()
+    if not claim_target:
+        claim_target = title
+
+    return {
+        "is_factcheck": True,
+        "rating": rating,
+        "claim": claim_target,
+    }
+
+
 def parse_published_date(entry: Dict[str, Any]) -> datetime:
     """Parse various timestamp formats from RSS/Atom entries to UTC datetime."""
     for field in ("published", "pubDate", "updated", "created"):
@@ -154,6 +218,15 @@ class IngestionEngine:
                 actors, chokepoints, keywords = extract_entities_and_chokepoints(f"{title} {summary}")
                 topics = list(set(actors + chokepoints + keywords))
 
+                fc_meta = extract_factcheck_metadata(
+                    title, summary, source_type=source.source_type, source_id=source.id
+                )
+                entities_dict: Dict[str, Any] = {"actors": actors, "chokepoints": chokepoints}
+                if fc_meta:
+                    entities_dict["factcheck"] = fc_meta
+                    if "Fact Check" not in topics:
+                        topics.append("Fact Check")
+
                 article = Article(
                     id=f"art_{uuid.uuid4().hex[:12]}",
                     source_id=source.id,
@@ -165,7 +238,7 @@ class IngestionEngine:
                     clean_text=summary,
                     published_at=published_at,
                     ingested_at=now,
-                    entities={"actors": actors, "chokepoints": chokepoints},
+                    entities=entities_dict,
                     topics=topics,
                 )
                 self.db.add(article)
