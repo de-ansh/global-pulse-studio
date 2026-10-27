@@ -17,6 +17,7 @@ import {
   ProjectSourceSheet,
   ClusterCrossCheckResult,
   ClaimCacheMatch,
+  MediaVerificationResult,
 } from '../types';
 
 const API_BASE = '/api';
@@ -329,5 +330,17 @@ export const api = {
       { method: 'POST' }
     );
     return handleResponse<Claim>(res);
+  },
+
+  async verifyMedia(projectId: string, claimId: string, mediaUrl: string): Promise<MediaVerificationResult> {
+    const res = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(projectId)}/claims/${encodeURIComponent(claimId)}/verify-media`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ media_url: mediaUrl }),
+      }
+    );
+    return handleResponse<MediaVerificationResult>(res);
   },
 };

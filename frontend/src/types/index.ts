@@ -379,3 +379,17 @@ export interface ClaimCacheMatch {
   message?: string | null;
 }
 
+export interface MediaVerificationResult {
+  media_url: string;
+  verdict: string;
+  risk_level: 'low' | 'medium' | 'high' | string;
+  is_recycled_footage: boolean;
+  is_synthetic_or_game: boolean;
+  earliest_seen_year?: number | null;
+  best_guess_label?: string | null;
+  web_entities: string[];
+  matching_domains: string[];
+  explanation: string;
+}
+
+

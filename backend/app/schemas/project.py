@@ -228,4 +228,23 @@ class ClaimCacheMatchResponse(BaseModel):
     message: Optional[str] = None
 
 
+class MediaVerificationRequest(BaseModel):
+    media_url: str
+    claimed_date: Optional[datetime] = None
+
+
+class MediaVerificationResponse(BaseModel):
+    media_url: str
+    verdict: str  # "Likely Original / Authentic", "Recycled Footage Warning", "Synthetic / Video Game Footage", "Inconclusive"
+    risk_level: str  # "low", "medium", "high"
+    is_recycled_footage: bool = False
+    is_synthetic_or_game: bool = False
+    earliest_seen_year: Optional[int] = None
+    best_guess_label: Optional[str] = None
+    web_entities: List[str] = []
+    matching_domains: List[str] = []
+    explanation: str
+
+
+
 

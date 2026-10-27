@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Claim, ClaimStatus, FactCheck, PrimarySourceResults, ClusterCrossCheckResult, ClaimCacheMatch } from '../../types';
+import { Claim, ClaimStatus, FactCheck, PrimarySourceResults, ClusterCrossCheckResult, ClaimCacheMatch, MediaVerificationResult } from '../../types';
 import { api } from '../../api/client';
 import { FactChecks } from '../radar/FactChecks';
 import { SupportVerdict } from '../studio/SupportVerdict';
-import { ListChecks, Trash2, ExternalLink, Plus, SearchCheck, ShieldCheck, Landmark, Check, ChevronDown, Layers, AlertTriangle } from 'lucide-react';
+import { ListChecks, Trash2, ExternalLink, Plus, SearchCheck, ShieldCheck, Landmark, Check, ChevronDown, Layers, AlertTriangle, Camera } from 'lucide-react';
 import { AI_DISABLED_HINT, useFeatures } from '../../features';
 
 // One-click verdicts are offered only where the AI's verified quotes point clearly one way.

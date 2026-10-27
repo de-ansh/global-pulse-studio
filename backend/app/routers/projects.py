@@ -34,8 +34,10 @@ from app.schemas.project import (
     SourceSheetCitation,
     ClusterCrossCheckResponse,
     ClaimCacheMatchResponse,
+    MediaVerificationRequest,
+    MediaVerificationResponse,
 )
-from app.services import scriptwriter, sourcefinder, verifier
+from app.services import scriptwriter, sourcefinder, verifier, multimedia
 from app.services.clusterer import tokenize_title
 from app.services.fulltext import ensure_full_text, fetch_page_text, web_client
 from app.schemas.event import FactCheckResponse
@@ -319,6 +321,21 @@ async def apply_cached_claim_verification(project_id: str, claim_id: str, db: As
     await db.commit()
     await db.refresh(claim)
     return claim
+
+
+@router.post("/{project_id}/claims/{claim_id}/verify-media", response_model=MediaVerificationResponse)
+async def verify_claim_media(
+    project_id: str,
+    claim_id: str,
+    payload: MediaVerificationRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Verify reverse web provenance and temporal consistency of media embedded in claim evidence."""
+    claim = await _get_claim_or_404(db, project_id, claim_id)
+    project = await _get_project_or_404(db, project_id)
+    claimed_date = payload.claimed_date or claim.created_at or project.created_at
+    result = await multimedia.verify_media_provenance(payload.media_url, claimed_date=claimed_date)
+    return MediaVerificationResponse(**result)
 
 
 CLAIM_CHECK_MAX_ARTICLES = 10

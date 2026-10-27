@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # Google Fact Check Tools API key (env: GPS_FACTCHECK_API_KEY); fact-check lookups are disabled without it
     FACTCHECK_API_KEY: str = ""
 
+    # Google Cloud Vision API key for reverse image/video search (env: GPS_VISION_API_KEY)
+    VISION_API_KEY: str = ""
+
     # Gemini script writer (env: GPS_GEMINI_API_KEY / GPS_GEMINI_MODEL); script generation is disabled without a key.
     # The model is a setting because Gemini model IDs change often; set it to any current text model.
     GEMINI_API_KEY: str = ""
