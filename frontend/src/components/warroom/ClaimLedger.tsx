@@ -32,8 +32,22 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
   const [crossChecking, setCrossChecking] = useState<string | null>(null);
   const [cacheMatches, setCacheMatches] = useState<Record<string, ClaimCacheMatch>>({});
   const [applyingCache, setApplyingCache] = useState<string | null>(null);
+  const [mediaChecks, setMediaChecks] = useState<Record<string, MediaVerificationResult>>({});
+  const [verifyingMedia, setVerifyingMedia] = useState<string | null>(null);
   const features = useFeatures();
   const [primary, setPrimary] = useState<Record<string, PrimarySourceResults>>({});
+
+  const handleVerifyMedia = async (claimId: string, url: string) => {
+    setVerifyingMedia(url);
+    try {
+      const res = await api.verifyMedia(projectId, claimId, url);
+      setMediaChecks((prev) => ({ ...prev, [url]: res }));
+    } catch (err: any) {
+      setError(err.message || 'Media verification failed');
+    } finally {
+      setVerifyingMedia(null);
+    }
+  };
 
   const applyCache = (claim: Claim) => {
     setApplyingCache(claim.id);
@@ -270,29 +284,70 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
             {claim.evidence.length > 0 && (
               <ul className="space-y-1">
                 {claim.evidence.map((ev, i) => (
-                  <li key={i} className="flex min-w-0 items-center gap-2 text-xs">
-                    <a href={ev.url} target="_blank" rel="noreferrer" title={ev.label || ev.url} className="flex min-w-0 items-center gap-1 text-cyan-300 hover:text-cyan-200">
-                      <ExternalLink className="w-3 h-3 shrink-0" />
-                      <span className="truncate min-w-0">{ev.label || ev.url}</span>
-                    </a>
-                    {ev.archive_url && (
-                      <a
-                        href={ev.archive_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Open Wayback Machine archive permalink"
-                        className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-slate-400 hover:text-cyan-300 border border-slate-700/60 shrink-0"
-                      >
-                        archive
+                  <li key={i} className="flex flex-col gap-1 text-xs">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <a href={ev.url} target="_blank" rel="noreferrer" title={ev.label || ev.url} className="flex min-w-0 items-center gap-1 text-cyan-300 hover:text-cyan-200">
+                        <ExternalLink className="w-3 h-3 shrink-0" />
+                        <span className="truncate min-w-0">{ev.label || ev.url}</span>
                       </a>
+                      {ev.archive_url && (
+                        <a
+                          href={ev.archive_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Open Wayback Machine archive permalink"
+                          className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-slate-400 hover:text-cyan-300 border border-slate-700/60 shrink-0"
+                        >
+                          archive
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleVerifyMedia(claim.id, ev.url)}
+                        disabled={verifyingMedia === ev.url}
+                        title="Reverse search footage to detect recycled/synthetic media"
+                        className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-slate-400 hover:text-amber-300 border border-slate-700/60 shrink-0 flex items-center gap-1"
+                      >
+                        <Camera className="w-2.5 h-2.5" />
+                        {verifyingMedia === ev.url ? 'Checking...' : 'Check Media'}
+                      </button>
+                      <button
+                        onClick={() => removeEvidence(claim, i)}
+                        className="text-slate-500 hover:text-rose-400"
+                        aria-label={`Remove evidence ${ev.label || ev.url}`}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+
+                    {mediaChecks[ev.url] && (
+                      <div className={`mt-1 p-2 rounded text-[11px] border flex flex-col gap-1 ${
+                        mediaChecks[ev.url].risk_level === 'high'
+                          ? 'bg-rose-950/40 border-rose-800 text-rose-300'
+                          : mediaChecks[ev.url].risk_level === 'medium'
+                          ? 'bg-amber-950/40 border-amber-800 text-amber-300'
+                          : 'bg-emerald-950/40 border-emerald-800 text-emerald-300'
+                      }`}>
+                        <div className="flex items-center gap-1.5 font-bold">
+                          <span>{mediaChecks[ev.url].verdict}</span>
+                          {mediaChecks[ev.url].earliest_seen_year && (
+                            <span className="font-mono text-[9px] px-1 py-0.5 rounded bg-rose-900/60 text-white">
+                              Earliest: {mediaChecks[ev.url].earliest_seen_year}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] opacity-90">{mediaChecks[ev.url].explanation}</p>
+                        {mediaChecks[ev.url].web_entities.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            {mediaChecks[ev.url].web_entities.map((tag, idx) => (
+                              <span key={idx} className="px-1 py-0.2 rounded bg-slate-900/80 text-[9px] font-mono text-slate-400 border border-slate-700/50">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     )}
-                    <button
-                      onClick={() => removeEvidence(claim, i)}
-                      className="text-slate-500 hover:text-rose-400"
-                      aria-label={`Remove evidence ${ev.label || ev.url}`}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
                   </li>
                 ))}
               </ul>

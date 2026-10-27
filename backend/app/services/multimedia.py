@@ -9,13 +9,13 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-SIMULATION_KEYWORDS = {
+SIMULATION_KEYWORDS = sorted([
     "arma 3", "arma iii", "arma", "dcs world", "digital combat simulator",
     "war thunder", "cgi", "computer-generated", "blender 3d", "flight simulator",
     "unreal engine", "simulator game", "gameplay", "modded game",
-}
+], key=len, reverse=True)
 
-YEAR_PATTERN = re.compile(r"/(20[0-2][0-9])(?:[-_/]|\b)")
+YEAR_PATTERN = re.compile(r"(?:^|[^0-9])(20[0-2][0-9])(?:[^0-9]|$)")
 
 
 def extract_years_from_urls_or_titles(texts: List[str]) -> List[int]:
