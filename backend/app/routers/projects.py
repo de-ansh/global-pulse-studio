@@ -6,7 +6,7 @@ import uuid
 from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -37,7 +37,7 @@ from app.schemas.project import (
     MediaVerificationRequest,
     MediaVerificationResponse,
 )
-from app.services import scriptwriter, sourcefinder, verifier, multimedia
+from app.services import scriptwriter, sourcefinder, verifier, multimedia, pdf_generator
 from app.services.clusterer import tokenize_title
 from app.services.fulltext import ensure_full_text, fetch_page_text, web_client
 from app.schemas.event import FactCheckResponse
