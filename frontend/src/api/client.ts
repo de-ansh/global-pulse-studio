@@ -309,6 +309,14 @@ export const api = {
     return handleResponse<ProjectSourceSheet>(res);
   },
 
+  async downloadSourceSheetPdf(projectId: string): Promise<Blob> {
+    const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/source-sheet/pdf`);
+    if (!res.ok) {
+      throw new Error(`[${res.status}] Failed to download PDF dossier`);
+    }
+    return res.blob();
+  },
+
   async crosscheckClaim(projectId: string, claimId: string): Promise<ClusterCrossCheckResult> {
     const res = await fetch(
       `${API_BASE}/projects/${encodeURIComponent(projectId)}/claims/${encodeURIComponent(claimId)}/crosscheck`,

@@ -1031,6 +1031,30 @@ async def get_project_source_sheet(project_id: str, db: AsyncSession = Depends(g
     )
 
 
+@router.get("/{project_id}/source-sheet/pdf")
+async def export_project_source_sheet_pdf(project_id: str, db: AsyncSession = Depends(get_db)):
+    """Export the Fact-Check Source Sheet as an immutable publication-grade PDF dossier."""
+    sheet = await get_project_source_sheet(project_id, db=db)
+    project = await _get_project_or_404(db, project_id)
+    readiness = await get_project_readiness(project_id, db=db)
+
+    pdf_bytes = pdf_generator.generate_source_sheet_pdf(
+        title=sheet.title,
+        readiness_score=sheet.readiness_score,
+        citations=sheet.citations,
+        sources=sheet.sources,
+        warnings=readiness.warnings,
+        working_slug=project.working_slug,
+    )
+
+    filename = f"source-dossier-{project.working_slug}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 
 @router.get("/{project_id}/export", response_class=PlainTextResponse)
 async def export_project_markdown(project_id: str, db: AsyncSession = Depends(get_db)):

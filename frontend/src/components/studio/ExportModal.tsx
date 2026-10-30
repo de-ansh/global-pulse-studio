@@ -18,6 +18,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [activeTab, setActiveTab] = useState<'brief' | 'sourcesheet'>('brief');
   const [sourceSheetMd, setSourceSheetMd] = useState<string | null>(null);
   const [loadingSourceSheet, setLoadingSourceSheet] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -53,6 +54,26 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     a.download = activeTab === 'brief' ? `${slug}-brief.md` : `${slug}-source-sheet.md`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!projectId) return;
+    setDownloadingPdf(true);
+    try {
+      const blob = await api.downloadSourceSheetPdf(projectId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const slug = projectTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      a.href = url;
+      a.download = `source-dossier-${slug}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to download PDF dossier:', err);
+      alert('Failed to generate PDF dossier. Please try again.');
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   return (
@@ -94,6 +115,17 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               <Download className="w-3.5 h-3.5" />
               <span>Download .md</span>
             </button>
+
+            {activeTab === 'sourcesheet' && projectId && (
+              <button
+                onClick={handleDownloadPdf}
+                disabled={loadingSourceSheet || downloadingPdf}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>{downloadingPdf ? 'Exporting PDF...' : 'Download PDF'}</span>
+              </button>
+            )}
 
             <button
               onClick={onClose}
