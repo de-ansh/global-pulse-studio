@@ -942,6 +942,14 @@ async def get_project_readiness(project_id: str, db: AsyncSession = Depends(get_
         if cross["independent_origins"] < 2:
             under_corroborated.append(claim)
 
+    # Governance risk: corroboration from state-directed outlets is weaker evidence,
+    # so it discounts the readiness score and blocks a "ready" verdict outright.
+    governance = verifier.evaluate_source_governance_risk(cluster_art_dicts)
+    governance_risk = governance["risk_level"]
+    state_controlled_sources = governance["state_controlled_count"]
+    governance_warning = governance["warning"]
+    governance_penalty = {"high": 25, "mixed": 8}.get(governance_risk, 0)
+
     score = 0
     if total_claims > 0:
         claim_ratio = (confirmed_claims * 1.0 + disputed_claims * 0.3 - false_claims * 0.6) / total_claims
@@ -964,8 +972,13 @@ async def get_project_readiness(project_id: str, db: AsyncSession = Depends(get_
     elif project.script:
         score += 10
 
+    score = max(0, score - governance_penalty)
     score = max(0, min(100, score))
     status_label = "ready" if score >= 80 else ("needs_review" if score >= 50 else "unverified")
+    # State-directed corroboration can never be "ready": cap at needs_review even if the
+    # numeric score would otherwise clear the threshold.
+    if governance_risk == "high" and status_label == "ready":
+        status_label = "needs_review"
 
     checklist = [
         ReadinessChecklistItem(
@@ -975,6 +988,16 @@ async def get_project_readiness(project_id: str, db: AsyncSession = Depends(get_
             detail=f"{independent_origins} independent origin(s) across {total_sources} source(s)."
             if independent_origins >= 2
             else "Single-source or uncorroborated; ingest secondary reporting before finalizing.",
+        ),
+        ReadinessChecklistItem(
+            id="source_governance",
+            label="Source Governance",
+            passed=governance_risk in ("none", "low"),
+            detail=(
+                f"{state_controlled_sources} state-controlled source(s) out of {total_sources}."
+                if governance_risk in ("none", "low")
+                else (governance_warning or "Corroboration relies on state-directed media.")
+            ),
         ),
         ReadinessChecklistItem(
             id="claims_reviewed",
@@ -1028,6 +1051,8 @@ async def get_project_readiness(project_id: str, db: AsyncSession = Depends(get_
         )
     if independent_origins < 2:
         warnings.append("Project relies on fewer than 2 independent news origins.")
+    if governance_warning:
+        warnings.append(governance_warning)
 
     return ProjectReadinessResponse(
         project_id=project_id,
@@ -1042,6 +1067,10 @@ async def get_project_readiness(project_id: str, db: AsyncSession = Depends(get_
         independent_origins=independent_origins,
         script_support_checked=script_support_checked,
         script_verdict_summary=script_support,
+        governance_risk=governance_risk,
+        governance_warning=governance_warning,
+        state_controlled_sources=state_controlled_sources,
+        governance_penalty=governance_penalty,
         checklist=checklist,
         warnings=warnings,
     )
@@ -1126,6 +1155,7 @@ async def get_project_source_sheet(project_id: str, db: AsyncSession = Depends(g
         "## 3. Verification Audit Summary",
         f"- **Total Claims**: {readiness.total_claims} ({readiness.confirmed_claims} confirmed, {readiness.unverified_claims} unverified)",
         f"- **Independent Origins**: {readiness.independent_origins}",
+        f"- **Source Governance**: {readiness.governance_risk.upper()} ({readiness.state_controlled_sources} state-controlled source(s))",
         f"- **Script Verification**: {'Passed (0 contradicted)' if (readiness.script_support_checked and readiness.status != 'unverified') else 'Pending or needs review'}",
     ])
     if readiness.warnings:
@@ -1138,6 +1168,9 @@ async def get_project_source_sheet(project_id: str, db: AsyncSession = Depends(g
         title=project.title,
         generated_at=datetime.now(timezone.utc),
         readiness_score=readiness.score,
+        governance_risk=readiness.governance_risk,
+        governance_warning=readiness.governance_warning,
+        state_controlled_sources=readiness.state_controlled_sources,
         citations=citations,
         sources=script_sources,
         markdown="\n".join(md_lines),

@@ -177,7 +177,18 @@ export const WarRoom: React.FC<WarRoomProps> = ({
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5 font-mono">
                   {readiness.confirmed_claims}/{readiness.total_claims} claims confirmed · {readiness.independent_origins} independent origin(s) ·{' '}
-                  {readiness.warnings.length === 0 ? 'No editorial flags' : `${readiness.warnings.length} warning(s)`}
+                  <span
+                    className={
+                      readiness.governance_risk === 'high'
+                        ? 'text-rose-400'
+                        : readiness.governance_risk === 'mixed'
+                        ? 'text-amber-400'
+                        : 'text-emerald-400'
+                    }
+                  >
+                    governance {readiness.governance_risk}
+                  </span>{' '}
+                  · {readiness.warnings.length === 0 ? 'No editorial flags' : `${readiness.warnings.length} warning(s)`}
                 </p>
               </div>
             </div>

@@ -319,6 +319,10 @@ export interface ProjectReadiness {
   independent_origins: number;
   script_support_checked: boolean;
   script_verdict_summary: Record<string, number>;
+  governance_risk: 'none' | 'low' | 'mixed' | 'high' | string;
+  governance_warning?: string | null;
+  state_controlled_sources: number;
+  governance_penalty: number;
   checklist: ReadinessChecklistItem[];
   warnings: string[];
 }
@@ -339,6 +343,9 @@ export interface ProjectSourceSheet {
   title: string;
   generated_at: string;
   readiness_score: number;
+  governance_risk: 'none' | 'low' | 'mixed' | 'high' | string;
+  governance_warning?: string | null;
+  state_controlled_sources: number;
   citations: SourceSheetCitation[];
   sources: any[];
   markdown: string;

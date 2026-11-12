@@ -75,6 +75,7 @@ def build_sources(articles: List[Any], claims: List[Any]) -> List[Dict[str, Any]
             "kind": "article",
             "title": art.title,
             "outlet": art.source.name if getattr(art, "source", None) else art.source_id,
+            "governance_type": getattr(getattr(art, "source", None), "governance_type", None),
             "url": art.url,
             "published_at": art.published_at.strftime("%Y-%m-%d"),
             "text": text[:MAX_SOURCE_CHARS],

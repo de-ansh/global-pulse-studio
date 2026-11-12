@@ -168,6 +168,10 @@ class ProjectReadinessResponse(BaseModel):
     independent_origins: int
     script_support_checked: bool
     script_verdict_summary: Dict[str, int] = {}
+    governance_risk: str = "none"  # "none" | "low" | "mixed" | "high"
+    governance_warning: Optional[str] = None
+    state_controlled_sources: int = 0
+    governance_penalty: int = 0
     checklist: List[ReadinessChecklistItem] = []
     warnings: List[str] = []
 
@@ -188,6 +192,9 @@ class ProjectSourceSheetResponse(BaseModel):
     title: str
     generated_at: datetime
     readiness_score: int
+    governance_risk: str = "none"  # "none" | "low" | "mixed" | "high"
+    governance_warning: Optional[str] = None
+    state_controlled_sources: int = 0
     citations: List[SourceSheetCitation] = []
     sources: List[Dict[str, Any]] = []
     markdown: str
