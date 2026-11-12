@@ -197,6 +197,8 @@ class ClusterCrossCheckArticle(BaseModel):
     id: str
     title: str
     outlet: str
+    origin: Optional[str] = None
+    governance_type: Optional[str] = None
     url: Optional[str] = None
     overlap_ratio: float = 0.0
     matched_terms: List[str] = []
@@ -211,8 +213,15 @@ class ClusterCrossCheckResponse(BaseModel):
     summary: str
     supporting: List[ClusterCrossCheckArticle] = []
     disputing: List[ClusterCrossCheckArticle] = []
+    independent_origins: int = 0
+    supporting_outlets: int = 0
+    disputing_origins: int = 0
     silent_count: int
     total_checked: int
+    governance_risk: str = "none"  # "none" | "low" | "mixed" | "high"
+    governance_warning: Optional[str] = None
+    auto_confirmed: bool = False
+    recommendation: Optional[str] = None
     superseded_warning: Optional[str] = None
 
 

@@ -496,9 +496,31 @@ export const ClaimLedger: React.FC<ClaimLedgerProps> = ({ projectId }) => {
                         </span>
                       </div>
                       <span className="text-[10px] font-mono text-slate-500">
-                        {crossChecks[claim.id].total_checked} articles checked
+                        {crossChecks[claim.id].independent_origins} independent origin
+                        {crossChecks[claim.id].independent_origins === 1 ? '' : 's'} · {crossChecks[claim.id].total_checked} articles
                       </span>
                     </div>
+
+                    {crossChecks[claim.id].auto_confirmed && (
+                      <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-400">
+                        Auto-confirmed by 2+ independent origins
+                      </div>
+                    )}
+
+                    {crossChecks[claim.id].recommendation && (
+                      <div className="p-2.5 rounded bg-sky-500/10 border border-sky-500/30 text-sky-200 text-[11px]">
+                        {crossChecks[claim.id].recommendation}
+                      </div>
+                    )}
+
+                    {crossChecks[claim.id].governance_warning && (
+                      <div className="p-2.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-200 text-[11px]">
+                        <span className="font-bold uppercase font-mono text-[10px] tracking-wider">
+                          Source governance · {crossChecks[claim.id].governance_risk}
+                        </span>
+                        <div className="mt-0.5">{crossChecks[claim.id].governance_warning}</div>
+                      </div>
+                    )}
 
                     {crossChecks[claim.id].superseded_warning && (
                       <div className="p-2.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2">

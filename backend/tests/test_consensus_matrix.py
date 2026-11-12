@@ -50,6 +50,37 @@ def test_crosscheck_claim_unaddressed():
     assert res["silent_count"] == 1
 
 
+def test_crosscheck_collapses_syndicated_wire_copies():
+    """Two outlets reprinting one wire are one origin, not two."""
+    same_copy = (
+        "ADEN (Reuters) - A bulk carrier was damaged by a missile strike near Aden, "
+        "maritime authorities said on Tuesday."
+    )
+    articles = [
+        {"id": "w1", "title": "Bulk carrier damaged by missile near Aden", "summary": same_copy, "outlet": "Outlet A"},
+        {"id": "w2", "title": "Bulk carrier damaged by missile near Aden", "summary": same_copy, "outlet": "Outlet B"},
+    ]
+    res = crosscheck_claim_against_articles("Bulk carrier damaged by missile near Aden", articles)
+
+    assert res["status"] == "isolated_claim"
+    assert res["independent_origins"] == 1
+    assert len(res["supporting"]) == 2
+    assert res["supporting_outlets"] == 2
+    assert {e["origin"] for e in res["supporting"]} == {"Reuters"}
+
+
+def test_crosscheck_counts_distinct_origins_as_corroborated():
+    articles = [
+        {"id": "d1", "title": "Destroyer intercepts three drones near Hormuz", "summary": "Naval destroyer intercepted three drones", "outlet": "Reuters"},
+        {"id": "d2", "title": "Three drones shot down in Hormuz corridor", "summary": "Officials confirm three drones destroyed", "outlet": "BBC"},
+    ]
+    res = crosscheck_claim_against_articles("Destroyer intercepted three drones near Hormuz", articles)
+
+    assert res["status"] == "corroborated"
+    assert res["independent_origins"] == 2
+    assert res["supporting_outlets"] == 2
+
+
 @pytest.mark.asyncio
 async def test_cluster_crosscheck_api_endpoint(client: AsyncClient, db_session):
     # 1. Create sources and a cluster with articles
@@ -110,3 +141,10 @@ async def test_cluster_crosscheck_api_endpoint(client: AsyncClient, db_session):
     assert data["status"] == "corroborated"
     assert len(data["supporting"]) == 2
     assert "Corroborated" in data["summary"]
+    assert data["independent_origins"] == 2
+    assert data["auto_confirmed"] is True
+
+    # Auto-confirm may only promote a previously unverified claim.
+    claim_after = (await client.get(f"/api/projects/{proj_id}/claims")).json()[0]
+    assert claim_after["status"] == "confirmed"
+    assert claim_after["status_changed_at"] is not None

@@ -8,6 +8,7 @@ import re
 from typing import Any, Dict, List
 
 from app.services import gemini
+from app.services.scorer import assign_origins
 
 VERDICTS = ["supported", "partly_supported", "contradicted", "not_addressed"]
 QUOTED_VERDICTS = {"supported", "partly_supported", "contradicted"}  # these need evidence to stand
@@ -422,25 +423,46 @@ def classify_epistemic_stance(text: str) -> Dict[str, Any]:
 
 def crosscheck_claim_against_articles(claim_text: str, articles: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Cross-examine a claim against all articles ingested in a crisis cluster.
-    
+
     Identifies multi-outlet consensus, conflicting reports, denials, or silence.
+    "Independent" counts distinct origins, not articles: wire copies and near-identical
+    rewrites of the same story collapse to one origin (see scorer.assign_origins).
     """
     from app.services.clusterer import tokenize_title
     c_text = (claim_text or "").strip()
     c_tokens = tokenize_title(c_text)
     claim_metrics = extract_numerical_metrics(c_text)
 
+    normalized: List[Dict[str, Any]] = []
+    for art in articles or []:
+        title = art.get("title") or ""
+        summary = art.get("summary") or ""
+        full_text = art.get("text") or ""
+        normalized.append({
+            "id": art.get("id") or str(id(art)),
+            "outlet": art.get("outlet") or art.get("source_id") or "Unknown Outlet",
+            "title": title,
+            "summary": summary,
+            "text": full_text,
+            "url": art.get("url"),
+            "governance_type": art.get("governance_type"),
+            "combined": f"{title} {summary} {full_text}",
+        })
+
+    # Collapse syndicated wire copies and near-identical rewrites to a shared origin.
+    origins = assign_origins([(a["outlet"], a["combined"]) for a in normalized])
+
     supporting = []
     disputing = []
     silent_ids = []
 
-    for art in articles or []:
-        art_id = art.get("id") or str(id(art))
-        outlet = art.get("outlet") or art.get("source_id") or "Unknown Outlet"
-        title = art.get("title") or ""
-        summary = art.get("summary") or ""
-        full_text = art.get("text") or ""
-        combined = f"{title} {summary} {full_text}"
+    for art, origin in zip(normalized, origins):
+        art_id = art["id"]
+        outlet = art["outlet"]
+        title = art["title"]
+        summary = art["summary"]
+        combined = art["combined"]
+        full_text = art["text"]
         norm_combined = _normalize(combined)
 
         if not norm_combined or not c_tokens:
@@ -448,7 +470,6 @@ def crosscheck_claim_against_articles(claim_text: str, articles: List[Dict[str, 
             continue
 
         art_tokens = tokenize_title(f"{title} {summary}")
-        # If body text exists, also consider its tokens
         if full_text:
             art_tokens = art_tokens.union(tokenize_title(full_text[:1000]))
 
@@ -484,10 +505,13 @@ def crosscheck_claim_against_articles(claim_text: str, articles: List[Dict[str, 
                 "id": art_id,
                 "title": title,
                 "outlet": outlet,
+                "origin": origin,
                 "url": art.get("url"),
                 "overlap_ratio": round(overlap_ratio, 2),
                 "matched_terms": list(intersection)[:5],
             }
+            if art.get("governance_type"):
+                entry["governance_type"] = art["governance_type"]
             if has_denial or metric_conflict:
                 entry["reason"] = "Denial/refutation reported" if has_denial else "Conflicting metric reported"
                 disputing.append(entry)
@@ -496,19 +520,31 @@ def crosscheck_claim_against_articles(claim_text: str, articles: List[Dict[str, 
         else:
             silent_ids.append(art_id)
 
+    # Distinct origins — not article or outlet count — decide consensus strength.
+    supporting_origins = {e["origin"] for e in supporting}
+    disputing_origins = {e["origin"] for e in disputing}
+    origin_count = len(supporting_origins)
+    supporting_outlets = len({e["outlet"] for e in supporting})
+
     # Determine consensus status
     if len(disputing) > 0:
         status = "disputed"
-        summary = f"Disputed: {len(disputing)} outlet(s) report denials or conflicting details while {len(supporting)} support."
-    elif len(supporting) >= 3:
+        summary = (
+            f"Disputed: {len(disputing_origins)} independent origin(s) report denials or conflicting details "
+            f"while {origin_count} other origin(s) support."
+        )
+    elif origin_count >= 3:
         status = "broad_consensus"
-        summary = f"Broad consensus: corroborated across {len(supporting)} independent articles in cluster."
-    elif len(supporting) == 2:
+        summary = f"Broad consensus: corroborated across {origin_count} independent origins in cluster."
+    elif origin_count == 2:
         status = "corroborated"
-        summary = f"Corroborated: reported by {len(supporting)} outlets in cluster."
-    elif len(supporting) == 1:
+        summary = f"Corroborated: reported by {origin_count} independent origins in cluster."
+    elif origin_count == 1:
         status = "isolated_claim"
-        summary = f"Isolated claim: reported by only 1 outlet ({supporting[0]['outlet']}) in cluster."
+        summary = (
+            f"Isolated claim: reported by only 1 independent origin ({supporting[0]['outlet']}) "
+            f"across {supporting_outlets} outlet(s) in cluster."
+        )
     else:
         status = "unaddressed"
         summary = "Unaddressed: claim not mentioned in current cluster articles."
@@ -518,6 +554,9 @@ def crosscheck_claim_against_articles(claim_text: str, articles: List[Dict[str, 
         "summary": summary,
         "supporting": supporting,
         "disputing": disputing,
+        "independent_origins": origin_count,
+        "supporting_outlets": supporting_outlets,
+        "disputing_origins": len(disputing_origins),
         "silent_count": len(silent_ids),
         "total_checked": len(articles or []),
     }

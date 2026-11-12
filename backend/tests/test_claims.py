@@ -48,6 +48,27 @@ async def test_claim_ledger_lifecycle(client: AsyncClient, db_session):
 
 
 @pytest.mark.asyncio
+async def test_export_blocks_on_false_claims(client: AsyncClient, db_session):
+    proj_id = (await client.post("/api/projects", json={"title": "Blocked export"})).json()["id"]
+    claim = (await client.post(
+        f"/api/projects/{proj_id}/claims",
+        json={"text": "Tanker seized on 20 Oct"},
+    )).json()
+
+    await client.patch(f"/api/projects/{proj_id}/claims/{claim['id']}", json={"status": "false"})
+    blocked = await client.get(f"/api/projects/{proj_id}/export")
+    assert blocked.status_code == 409
+    assert "Export blocked" in blocked.json()["detail"]
+    assert "marked false" in blocked.json()["detail"]
+
+    # Unverified claims remain advisory, not blocking.
+    await client.patch(f"/api/projects/{proj_id}/claims/{claim['id']}", json={"status": "unverified"})
+    allowed = await client.get(f"/api/projects/{proj_id}/export")
+    assert allowed.status_code == 200
+    assert "WARNING: 1 of 1 claims are not confirmed" in allowed.text
+
+
+@pytest.mark.asyncio
 async def test_claim_fact_check_searches_claim_text(client: AsyncClient, monkeypatch):
     from app.config import settings
     from app.services import factcheck

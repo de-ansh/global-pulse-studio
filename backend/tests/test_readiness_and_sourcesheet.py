@@ -67,6 +67,70 @@ def test_check_numerical_consistency_discrepancy():
 
 
 @pytest.mark.asyncio
+async def test_readiness_flags_confirmed_claim_without_two_origins(client: AsyncClient, db_session):
+    from datetime import datetime, timezone
+
+    from app.models.event import EventCluster
+    from app.models.source import Article, Source
+
+    src_a = Source(id="outlet_a", name="Outlet A", feed_url="https://a.example/rss")
+    src_b = Source(id="outlet_b", name="Outlet B", feed_url="https://b.example/rss")
+    cluster = EventCluster(
+        id="cls_origin_readiness",
+        headline="Aden shipping incident",
+        severity="crisis",
+        region="Middle East",
+        status="active",
+        summary="Missile strike near Aden",
+    )
+    db_session.add_all([src_a, src_b, cluster])
+    await db_session.flush()
+
+    wire_copy = (
+        "ADEN (Reuters) - A bulk carrier was damaged by a missile strike near Aden, "
+        "maritime authorities said on Tuesday."
+    )
+    published = datetime(2026, 11, 12, 6, 0, tzinfo=timezone.utc)
+    db_session.add_all([
+        Article(
+            id="rd_art_1",
+            cluster_id=cluster.id,
+            source_id="outlet_a",
+            canonical_hash="rd_hash_1",
+            title="Bulk carrier damaged by missile near Aden",
+            url="https://a.example/aden-strike",
+            summary=wire_copy,
+            published_at=published,
+        ),
+        Article(
+            id="rd_art_2",
+            cluster_id=cluster.id,
+            source_id="outlet_b",
+            canonical_hash="rd_hash_2",
+            title="Bulk carrier damaged by missile near Aden",
+            url="https://b.example/aden-strike",
+            summary=wire_copy,
+            published_at=published,
+        ),
+    ])
+    await db_session.commit()
+
+    proj_id = (await client.post(
+        "/api/projects", json={"title": "Aden readiness", "cluster_id": cluster.id}
+    )).json()["id"]
+    claim = (await client.post(
+        f"/api/projects/{proj_id}/claims",
+        json={"text": "Bulk carrier damaged by missile near Aden"},
+    )).json()
+    await client.patch(f"/api/projects/{proj_id}/claims/{claim['id']}", json={"status": "confirmed"})
+
+    readiness = (await client.get(f"/api/projects/{proj_id}/readiness")).json()
+    origins_check = next(i for i in readiness["checklist"] if i["id"] == "claim_origins")
+    assert origins_check["passed"] is False
+    assert any("fewer than 2 independent origins" in w for w in readiness["warnings"])
+
+
+@pytest.mark.asyncio
 async def test_project_readiness_and_source_sheet_lifecycle(client: AsyncClient, db_session):
     # 1. Create a project
     res = await client.post("/api/projects", json={"title": "Bab-el-Mandeb Maritime Security"})

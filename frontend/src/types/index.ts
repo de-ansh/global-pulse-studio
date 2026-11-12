@@ -348,6 +348,8 @@ export interface ClusterCrossCheckArticle {
   id: string;
   title: string;
   outlet: string;
+  origin?: string | null;
+  governance_type?: string | null;
   url?: string | null;
   overlap_ratio: number;
   matched_terms: string[];
@@ -362,8 +364,15 @@ export interface ClusterCrossCheckResult {
   summary: string;
   supporting: ClusterCrossCheckArticle[];
   disputing: ClusterCrossCheckArticle[];
+  independent_origins: number;
+  supporting_outlets: number;
+  disputing_origins: number;
   silent_count: number;
   total_checked: number;
+  governance_risk: 'none' | 'low' | 'mixed' | 'high' | string;
+  governance_warning?: string | null;
+  auto_confirmed: boolean;
+  recommendation?: string | null;
   superseded_warning?: string | null;
 }
 

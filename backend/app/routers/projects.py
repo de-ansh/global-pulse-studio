@@ -467,7 +467,11 @@ async def crosscheck_claim_cluster(project_id: str, claim_id: str, db: AsyncSess
 
     articles = []
     if project.cluster_id:
-        res = await db.execute(select(Article).where(Article.cluster_id == project.cluster_id))
+        res = await db.execute(
+            select(Article)
+            .options(selectinload(Article.source))
+            .where(Article.cluster_id == project.cluster_id)
+        )
         articles = list(res.scalars().all())
 
     # Fallback to script sources if project was created manually without cluster_id
@@ -478,13 +482,72 @@ async def crosscheck_claim_cluster(project_id: str, claim_id: str, db: AsyncSess
         ]
     else:
         art_dicts = [
-            {"id": a.id, "title": a.title or "", "summary": a.summary or "", "text": a.clean_text or "", "outlet": a.source_id, "url": a.url, "published_at": a.published_at}
+            {
+                "id": a.id,
+                "title": a.title or "",
+                "summary": a.summary or "",
+                "text": a.clean_text or "",
+                "outlet": a.source_id,
+                "url": a.url,
+                "published_at": a.published_at,
+                "governance_type": a.source.governance_type if a.source else None,
+            }
             for a in articles
         ]
 
     result = verifier.crosscheck_claim_against_articles(claim.text, art_dicts)
     retraction_check = verifier.detect_superseded_claim(claim.text, claim.created_at, art_dicts)
     superseded_warning = retraction_check["warning"] if retraction_check["is_superseded"] else None
+
+    # Governance risk is measured over the sources that actually corroborate the claim.
+    corroborating = result["supporting"] + result["disputing"]
+    governance = verifier.evaluate_source_governance_risk(corroborating)
+
+    # Auto-confirm is deliberately narrow: it may only promote an unreviewed claim,
+    # and only on >=2 independent origins that are not solely state-controlled media.
+    auto_confirmed = False
+    if (
+        claim.status == "unverified"
+        and result["independent_origins"] >= 2
+        and governance["risk_level"] != "high"
+    ):
+        claim.status = "confirmed"
+        claim.status_changed_at = datetime.now(timezone.utc)
+        c_hash = hashlib.sha256(verifier._normalize(claim.text).encode("utf-8")).hexdigest()
+        cached = await db.get(VerifiedClaimCache, c_hash)
+        if not cached:
+            db.add(VerifiedClaimCache(
+                canonical_hash=c_hash,
+                claim_text=claim.text,
+                status=claim.status,
+                epistemic_level=claim.epistemic_level,
+                attributed_to=claim.attributed_to,
+                evidence=claim.evidence or [],
+                verified_in_project_id=project_id,
+            ))
+        else:
+            cached.status = claim.status
+            cached.epistemic_level = claim.epistemic_level
+            cached.attributed_to = claim.attributed_to
+            cached.evidence = claim.evidence or []
+            cached.verified_in_project_id = project_id
+        await db.commit()
+        await db.refresh(claim)
+        auto_confirmed = True
+
+    recommendation = None
+    if result["status"] == "isolated_claim":
+        recommendation = "Only one independent origin reports this. Find a second outlet that did not reprint the same wire before confirming."
+    elif result["status"] == "unaddressed":
+        recommendation = "No cluster article addresses this claim. Add a source or remove the claim before finalizing."
+    elif result["status"] == "disputed":
+        recommendation = "Sources conflict. Keep this claim disputed and surface the denial in the script."
+    elif governance["risk_level"] == "high":
+        recommendation = "All corroborating sources are state-controlled. Attribute the claim on screen rather than presenting it as consensus."
+    elif governance["risk_level"] == "mixed":
+        recommendation = governance["warning"]
+    elif result["independent_origins"] >= 2 and result["supporting_outlets"] > result["independent_origins"]:
+        recommendation = "Multiple outlets reprinted the same origin; independent corroboration is weaker than the outlet count suggests."
 
     return ClusterCrossCheckResponse(
         claim_id=claim.id,
@@ -494,8 +557,15 @@ async def crosscheck_claim_cluster(project_id: str, claim_id: str, db: AsyncSess
         summary=result["summary"],
         supporting=result["supporting"],
         disputing=result["disputing"],
+        independent_origins=result["independent_origins"],
+        supporting_outlets=result["supporting_outlets"],
+        disputing_origins=result["disputing_origins"],
         silent_count=result["silent_count"],
         total_checked=result["total_checked"],
+        governance_risk=governance["risk_level"],
+        governance_warning=governance["warning"],
+        auto_confirmed=auto_confirmed,
+        recommendation=recommendation,
         superseded_warning=superseded_warning,
     )
 
@@ -825,7 +895,11 @@ async def get_project_readiness(project_id: str, db: AsyncSession = Depends(get_
 
     cluster_articles = []
     if project.cluster_id:
-        articles_res = await db.execute(select(Article).where(Article.cluster_id == project.cluster_id))
+        articles_res = await db.execute(
+            select(Article)
+            .options(selectinload(Article.source))
+            .where(Article.cluster_id == project.cluster_id)
+        )
         cluster_articles = list(articles_res.scalars().all())
 
     script_sources = (project.script.sources or []) if project.script else []
@@ -845,6 +919,28 @@ async def get_project_readiness(project_id: str, db: AsyncSession = Depends(get_
     from app.services.scorer import assign_origins
     origins = assign_origins([(a.source_id, a.title or "") for a in cluster_articles]) if cluster_articles else []
     independent_origins = len(set(origins)) if origins else (1 if total_sources > 0 else 0)
+
+    # Per-claim corroboration: a confirmed claim is only as strong as the number of
+    # independent origins that actually address it (wire reprints collapse to one).
+    cluster_art_dicts = [
+        {
+            "id": a.id,
+            "title": a.title or "",
+            "summary": a.summary or "",
+            "text": a.clean_text or "",
+            "outlet": a.source_id or "Unknown Outlet",
+            "url": a.url,
+            "governance_type": a.source.governance_type if a.source else None,
+        }
+        for a in cluster_articles
+    ]
+    under_corroborated = []
+    for claim in claims:
+        if claim.status != "confirmed":
+            continue
+        cross = verifier.crosscheck_claim_against_articles(claim.text, cluster_art_dicts)
+        if cross["independent_origins"] < 2:
+            under_corroborated.append(claim)
 
     score = 0
     if total_claims > 0:
@@ -889,6 +985,18 @@ async def get_project_readiness(project_id: str, db: AsyncSession = Depends(get_
             else f"{unverified_claims} unverified claim(s) remaining in ledger.",
         ),
         ReadinessChecklistItem(
+            id="claim_origins",
+            label="Per-Claim Independent Origins",
+            passed=confirmed_claims > 0 and not under_corroborated,
+            detail=f"All {confirmed_claims} confirmed claim(s) cite at least 2 independent origins."
+            if (confirmed_claims > 0 and not under_corroborated)
+            else (
+                f"{len(under_corroborated)} confirmed claim(s) cite fewer than 2 independent origins."
+                if under_corroborated
+                else "No confirmed claims to corroborate yet."
+            ),
+        ),
+        ReadinessChecklistItem(
             id="no_contradictions",
             label="Contradiction Freedom",
             passed=false_claims == 0 and contradicted_statements == 0,
@@ -913,6 +1021,11 @@ async def get_project_readiness(project_id: str, db: AsyncSession = Depends(get_
         warnings.append(f"{contradicted_statements} script beat(s) contradicted by sources.")
     if unverified_claims > 0:
         warnings.append(f"{unverified_claims} claim(s) still unverified in ledger.")
+    if under_corroborated:
+        warnings.append(
+            f"{len(under_corroborated)} confirmed claim(s) cite fewer than 2 independent origins; "
+            "corroborate them before export."
+        )
     if independent_origins < 2:
         warnings.append("Project relies on fewer than 2 independent news origins.")
 
@@ -1072,6 +1185,22 @@ async def export_project_markdown(project_id: str, db: AsyncSession = Depends(ge
     claims_res = await db.execute(select(Claim).where(Claim.project_id == project_id).order_by(Claim.created_at))
     claims = list(claims_res.scalars().all())
     unconfirmed = [c for c in claims if c.status != "confirmed"]
+
+    # Hard gate: never export a brief that still asserts known-false claims or
+    # contradicted narration. Unverified claims stay advisory (warning only).
+    false_claims = [c for c in claims if c.status == "false"]
+    script_support = ((project.script.stats or {}).get("support") or {}) if project.script else {}
+    contradicted_statements = script_support.get("contradicted", 0)
+    if false_claims or contradicted_statements:
+        problems = []
+        if false_claims:
+            problems.append(f"{len(false_claims)} claim(s) marked false")
+        if contradicted_statements:
+            problems.append(f"{contradicted_statements} contradicted script line(s)")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Export blocked: " + " and ".join(problems) + ". Resolve them before exporting.",
+        )
 
     lines = [
         f"# Video Essay Production Brief: {project.title}",
