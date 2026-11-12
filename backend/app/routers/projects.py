@@ -32,12 +32,13 @@ from app.schemas.project import (
     ReadinessChecklistItem,
     ProjectSourceSheetResponse,
     SourceSheetCitation,
+    ProjectProductionPackageResponse,
     ClusterCrossCheckResponse,
     ClaimCacheMatchResponse,
     MediaVerificationRequest,
     MediaVerificationResponse,
 )
-from app.services import scriptwriter, sourcefinder, verifier, multimedia, pdf_generator
+from app.services import gemini, scriptwriter, sourcefinder, verifier, multimedia, pdf_generator, production
 from app.services.clusterer import tokenize_title
 from app.services.fulltext import ensure_full_text, fetch_page_text, web_client
 from app.schemas.event import FactCheckResponse
@@ -1349,3 +1350,91 @@ def _script_markdown(script: Script) -> List[str]:
         else:
             lines.append(f"- [{s['id']}] Claim ({s['status']}): {s['text']}")
     return lines
+
+
+async def _get_scripted_project_or_404(db: AsyncSession, project_id: str) -> Project:
+    """Load a project with its script; 404 when the project or the script is missing."""
+    stmt = select(Project).options(selectinload(Project.script)).where(Project.id == project_id)
+    project = (await db.execute(stmt)).scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+    if not project.script:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No narration script yet. Generate a script before building the production package.",
+        )
+    return project
+
+
+@router.get("/{project_id}/production-package", response_model=ProjectProductionPackageResponse)
+async def get_production_package(project_id: str, voice: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    """Deterministic shot list, timings, captions and render manifest for the stored script."""
+    project = await _get_scripted_project_or_404(db, project_id)
+    return production.build_production_package(project.script, voice=voice or settings.GEMINI_TTS_VOICE or None)
+
+
+@router.get("/{project_id}/production-package/shotlist")
+async def download_production_shotlist(
+    project_id: str,
+    format: str = "md",
+    db: AsyncSession = Depends(get_db),
+):
+    """Download the shot list as an editor Markdown brief or a spreadsheet-friendly CSV."""
+    if format not in {"md", "csv"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="format must be 'md' or 'csv'.")
+    project = await _get_scripted_project_or_404(db, project_id)
+    package = production.build_production_package(project.script)
+    if format == "csv":
+        body, media_type, ext = package["shotlist_csv"], "text/csv", "csv"
+    else:
+        body, media_type, ext = package["shotlist_markdown"], "text/markdown", "md"
+    return Response(
+        content=body,
+        media_type=f"{media_type}; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="shotlist-{project.working_slug}.{ext}"'},
+    )
+
+
+@router.get("/{project_id}/production-package/captions")
+async def download_production_captions(
+    project_id: str,
+    format: str = "srt",
+    db: AsyncSession = Depends(get_db),
+):
+    """Download captions for timeline beats. Blocked [NEEDS SOURCE] beats are intentionally absent."""
+    if format not in {"srt", "vtt"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="format must be 'srt' or 'vtt'.")
+    project = await _get_scripted_project_or_404(db, project_id)
+    package = production.build_production_package(project.script)
+    body = package["captions_srt"] if format == "srt" else package["captions_vtt"]
+    return Response(
+        content=body,
+        media_type=f"text/{format}; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="captions-{project.working_slug}.{format}"'},
+    )
+
+
+@router.post("/{project_id}/production-package/narration")
+async def synthesize_production_narration(
+    project_id: str,
+    voice: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Synthesise narration audio (WAV) for the timeline beats via Gemini TTS.
+
+    Returns 503 when no Gemini key is configured and 409 when there is nothing recordable (all beats blocked).
+    """
+    project = await _get_scripted_project_or_404(db, project_id)
+    package = production.build_production_package(project.script, voice=voice or settings.GEMINI_TTS_VOICE or None)
+    text = production.narration_text(package)
+    if not text:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Nothing to narrate: every beat is blocked on a missing source or the script has no beats.",
+        )
+    audio = await gemini.request_audio(text, voice=voice or settings.GEMINI_TTS_VOICE or None)
+    return Response(
+        content=audio,
+        media_type="audio/wav",
+        headers={"Content-Disposition": f'attachment; filename="narration-{project.working_slug}.wav"'},
+    )

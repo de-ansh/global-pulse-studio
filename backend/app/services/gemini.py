@@ -3,8 +3,11 @@
 The API key is sent in a header (never the URL) so it can't leak through error messages,
 and every failure becomes an HTTPException with an actionable message.
 """
+import base64
+import io
 import json
 import logging
+import wave
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -94,3 +97,71 @@ async def generate_json(system: str, prompt: str, schema: Dict[str, Any], *, cut
         return parse_json_response(payload, cut_off_hint), model
     except ValueError as exc:
         raise bad_gateway(str(exc))
+
+
+async def request_audio(text: str, *, voice: Optional[str] = None) -> bytes:
+    """Synthesise narration with Gemini TTS and return a 24 kHz mono 16-bit WAV.
+
+    Gemini returns raw PCM in base64 chunks with no container and no word-level timestamps, so we wrap the
+    samples in a WAV header ourselves. Callers pace the timeline from word counts (see ``production.py``).
+    """
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Narration audio is not configured. Set GPS_GEMINI_API_KEY (Google AI Studio key) in backend/.env and restart.",
+        )
+    model = settings.GEMINI_TTS_MODEL
+    body: Dict[str, Any] = {
+        "contents": [{"role": "user", "parts": [{"text": text}]}],
+        "generationConfig": {
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {
+                "voiceConfig": {
+                    "prebuiltVoiceConfig": {"voiceName": voice or settings.GEMINI_TTS_VOICE}
+                }
+            },
+        },
+    }
+    try:
+        async with httpx.AsyncClient(timeout=settings.GEMINI_TIMEOUT_SECONDS) as client:
+            res = await client.post(
+                GEMINI_URL.format(model=model),
+                json=body,
+                headers={"x-goog-api-key": settings.GEMINI_API_KEY},
+            )
+    except httpx.HTTPError as exc:
+        logger.warning("Gemini TTS request failed: %s", type(exc).__name__)
+        raise bad_gateway("Could not reach Gemini for narration audio. Check your connection and try again.")
+    if res.status_code != 200:
+        try:
+            message = res.json().get("error", {}).get("message", "")
+        except ValueError:
+            message = ""
+        hint = f" Check GPS_GEMINI_TTS_MODEL ('{model}')." if res.status_code == 404 else ""
+        raise bad_gateway(f"Gemini TTS error (HTTP {res.status_code}): {message[:300]}{hint}")
+
+    payload = res.json()
+    block = (payload.get("promptFeedback") or {}).get("blockReason")
+    if block:
+        raise bad_gateway(f"Gemini blocked the narration request ({block}).")
+    candidates = payload.get("candidates") or []
+    parts = ((candidates[0].get("content") or {}).get("parts") or []) if candidates else []
+    chunks: List[bytes] = []
+    for part in parts:
+        data = (part.get("inlineData") or {}).get("data")
+        if not data:
+            continue
+        try:
+            chunks.append(base64.b64decode(data))
+        except (ValueError, TypeError) as exc:
+            raise bad_gateway("Gemini returned malformed narration audio.") from exc
+    if not chunks:
+        raise bad_gateway("Gemini returned no narration audio.")
+
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(24000)
+        wav.writeframes(b"".join(chunks))
+    return buf.getvalue()

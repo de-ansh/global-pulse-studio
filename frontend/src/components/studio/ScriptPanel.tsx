@@ -1,13 +1,34 @@
 import React, { useEffect, useState } from 'react';
-import { NarrationScript, ScriptSource } from '../../types';
+import { NarrationScript, ProjectProductionPackage, ScriptSource } from '../../types';
 import { api } from '../../api/client';
-import { FileText, RefreshCw, AlertTriangle, HelpCircle, ExternalLink, ShieldCheck, ListPlus } from 'lucide-react';
+import {
+  FileText,
+  RefreshCw,
+  AlertTriangle,
+  HelpCircle,
+  ExternalLink,
+  ShieldCheck,
+  ListPlus,
+  Download,
+  Captions,
+  Mic,
+  Clapperboard,
+} from 'lucide-react';
 import { SupportVerdict, VERDICT_STYLES } from './SupportVerdict';
 import { AI_DISABLED_HINT, useFeatures } from '../../features';
 
 interface ScriptPanelProps {
   projectId: string;
 }
+
+const saveBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
 
 const KIND_STYLES: Record<string, string> = {
   fact: 'bg-cyan-950/60 text-cyan-300 border-cyan-800/40',
@@ -62,6 +83,9 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
   const [extracting, setExtracting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pkg, setPkg] = useState<ProjectProductionPackage | null>(null);
+  const [narrating, setNarrating] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   useEffect(() => {
     setScript(null);
@@ -73,6 +97,21 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
         if (!String(err.message).startsWith('[404]')) setError(err.message);
       });
   }, [projectId]);
+
+  useEffect(() => {
+    setPkg(null);
+    if (!script) return;
+    let live = true;
+    api
+      .getProductionPackage(projectId)
+      .then((res) => live && setPkg(res))
+      .catch(() => {
+        // The production package is a convenience; a failure must not mask the script.
+      });
+    return () => {
+      live = false;
+    };
+  }, [projectId, script]);
 
   const generate = async () => {
     setGenerating(true);
@@ -118,6 +157,48 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
 
   const sourcesById = Object.fromEntries((script?.sources || []).map((s) => [s.id, s]));
   const stats = script?.stats;
+  const fileStem =
+    (script?.content.title || 'narration')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60) || 'narration';
+
+  const downloadShotlist = async (format: 'md' | 'csv') => {
+    setDownloading(`shotlist-${format}`);
+    setError(null);
+    try {
+      saveBlob(await api.downloadShotlist(projectId, format), `${fileStem}-shotlist.${format}`);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const downloadCaptions = async () => {
+    setDownloading('captions');
+    setError(null);
+    try {
+      saveBlob(await api.downloadCaptions(projectId, 'srt'), `${fileStem}-captions.srt`);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const narrate = async () => {
+    setNarrating(true);
+    setError(null);
+    try {
+      saveBlob(await api.synthesizeNarration(projectId), `${fileStem}-narration.wav`);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setNarrating(false);
+    }
+  };
 
   return (
     <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 space-y-4">
@@ -206,6 +287,85 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
                     {n} {VERDICT_STYLES[v]?.label.toLowerCase()}
                   </span>
                 ))}
+            </div>
+          )}
+
+          {pkg && (
+            <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <h4 className="flex items-center gap-1.5 text-xs font-mono font-bold text-slate-200">
+                  <Clapperboard className="w-3.5 h-3.5 text-cyan-300" />
+                  <span>Production package</span>
+                </h4>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => downloadShotlist('md')}
+                    disabled={downloading !== null}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 transition disabled:opacity-60"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>{downloading === 'shotlist-md' ? 'Saving...' : 'Shot list .md'}</span>
+                  </button>
+                  <button
+                    onClick={() => downloadShotlist('csv')}
+                    disabled={downloading !== null}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 transition disabled:opacity-60"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>{downloading === 'shotlist-csv' ? 'Saving...' : 'Shot list .csv'}</span>
+                  </button>
+                  <button
+                    onClick={downloadCaptions}
+                    disabled={downloading !== null}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 transition disabled:opacity-60"
+                  >
+                    <Captions className="w-3 h-3" />
+                    <span>{downloading === 'captions' ? 'Saving...' : 'Captions .srt'}</span>
+                  </button>
+                  <button
+                    onClick={narrate}
+                    disabled={narrating || !features.ai}
+                    title={aiTitle}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold bg-cyan-600 hover:bg-cyan-500 text-white transition disabled:opacity-60"
+                  >
+                    <Mic className={`w-3 h-3 ${narrating ? 'animate-pulse' : ''}`} />
+                    <span>{narrating ? 'Synthesizing...' : 'Narration .wav'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 text-[10px] font-mono">
+                <span className="px-1.5 py-0.5 rounded border bg-slate-900 border-slate-800 text-slate-400">
+                  {pkg.included_shots} of {pkg.total_shots} shots timed
+                </span>
+                <span className="px-1.5 py-0.5 rounded border bg-slate-900 border-slate-800 text-slate-400">
+                  runtime {pkg.narration.estimated_runtime_timecode}
+                </span>
+                <span className="px-1.5 py-0.5 rounded border bg-slate-900 border-slate-800 text-slate-500">
+                  {pkg.narration.word_count} words @ {pkg.narration.words_per_minute} wpm
+                </span>
+                {pkg.narration.voice && (
+                  <span className="px-1.5 py-0.5 rounded border bg-slate-900 border-slate-800 text-slate-500">
+                    voice {pkg.narration.voice}
+                  </span>
+                )}
+                {pkg.needs_source_shots > 0 && (
+                  <span className="px-1.5 py-0.5 rounded border bg-amber-950/50 border-amber-800/40 text-amber-300">
+                    {pkg.needs_source_shots} blocked by missing sources
+                  </span>
+                )}
+              </div>
+
+              {pkg.warnings.length > 0 && (
+                <ul className="space-y-1">
+                  {pkg.warnings.map((warning, i) => (
+                    <li key={i} className="flex items-start gap-1.5 text-[11px] font-mono text-amber-300">
+                      <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                      <span>{warning}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 

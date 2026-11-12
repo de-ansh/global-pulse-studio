@@ -29,7 +29,17 @@ Global Pulse Studio transforms noisy international reporting into structured doc
    - Generates a **5-Act Documentary Essay Structure** complete with timecodes, key narration questions, and visual B-roll / 3D map graphics cues.
    - Exports directly to clean Markdown ready for scriptwriters and video editors.
 
-4. **Plug-and-Play Web Dashboard**:
+4. **Verification Before Production**:
+   - Collapses republished wire copy into **independent origins**, so corroboration counts distinct newsrooms instead of article volume.
+   - Classifies source governance (state-controlled, state-funded, commercial wire, public broadcaster) and penalises readiness when corroboration leans on state media; state-controlled-only support can never reach `ready`.
+   - Flags contradictions, unsupported statements, and `[NEEDS SOURCE]` beats before anything is recorded.
+
+5. **Video Production Package**:
+   - Turns the verified script into a per-beat **shot list** (Markdown brief and CSV spreadsheet) with citations and B-roll cues.
+   - Derives a **timeline, runtime estimate, and SRT/VTT captions** from narration word counts; blocked `[NEEDS SOURCE]` beats are listed as warnings and never get timings or captions.
+   - Optionally synthesises **narration audio (WAV)** with Gemini TTS, using the same key as scriptwriting.
+
+6. **Plug-and-Play Web Dashboard**:
    - Zero-dependency dark-mode dashboard served directly from the FastAPI application.
 
 ---
@@ -71,6 +81,14 @@ echo 'GPS_GEMINI_API_KEY=your-key' >> backend/.env
 echo 'GPS_GEMINI_MODEL=gemini-2.5-flash' >> backend/.env
 ```
 
+### Optional: Narration Audio (Gemini TTS)
+The production package can also render narration audio by reusing `GPS_GEMINI_API_KEY`. Defaults are the Gemini TTS preview model and the `Kore` voice; override them if you prefer:
+```bash
+echo 'GPS_GEMINI_TTS_MODEL=gemini-2.5-flash-preview-tts' >> backend/.env
+echo 'GPS_GEMINI_TTS_VOICE=Kore' >> backend/.env
+```
+Without a key the shot list, timings and captions still work; only the audio download returns a 503 with instructions.
+
 ### Optional: Automatic Scans
 By default feeds are only scanned when you click Scan. To scan in the background every 30 minutes:
 ```bash
@@ -110,15 +128,18 @@ cd backend
 PYTHONPATH=. pytest tests -v
 ```
 
-All 27 tests cover:
+All 156 tests cover:
 - HTML sanitization and URL deduplication
 - Strategic keyword and chokepoint entity extraction
 - Explainer score and severity classification
 - Wire-copy merging, reliability-weighted triangulation, and fact-check lookup
 - Claim ledger: verdicts, evidence links, export warnings
+- Independent-origin corroboration and the per-claim verification gate
+- Source governance risk, readiness penalties, and state-controlled status caps
 - Multi-source event clustering
 - Radar API endpoints, feed seeding, and source pause/delete
 - Full creator project lifecycle: Project -> Angles -> Dossier -> 5-Act Script Outline -> Markdown Export
+- Production package: shot list, monotonic timings, captions, narration text, and blocked-beat handling
 - Browser dashboard serving
 
 ---

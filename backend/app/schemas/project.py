@@ -262,5 +262,66 @@ class MediaVerificationResponse(BaseModel):
     explanation: str
 
 
+class ProductionCitation(BaseModel):
+    """One resolved (or unresolved) citation attached to a shot."""
+    id: str
+    found: bool = True
+    kind: Optional[str] = None  # "article" | "claim" | "unknown"
+    title: Optional[str] = None
+    outlet: Optional[str] = None
+    url: Optional[str] = None
+    published_at: Optional[str] = None
+    status: Optional[str] = None
+    governance_type: Optional[str] = None
+    text: Optional[str] = None
+
+
+class ProductionShot(BaseModel):
+    """One beat as an editor-ready shot, with timings only when it is not blocked on a source."""
+    shot_number: int
+    act_index: int
+    act_title: str
+    act_timecode: str = ""
+    beat_index: int
+    kind: str
+    narration: str
+    broll: Optional[str] = None
+    citations: List[ProductionCitation] = []
+    needs_source: bool
+    included_in_timeline: bool
+    start_seconds: Optional[float] = None
+    end_seconds: Optional[float] = None
+    duration_seconds: Optional[float] = None
+    start_timecode: Optional[str] = None
+    end_timecode: Optional[str] = None
+
+
+class ProductionNarrationPlan(BaseModel):
+    voice: Optional[str] = None
+    words_per_minute: int
+    word_count: int
+    estimated_runtime_seconds: float
+    estimated_runtime_timecode: str
+
+
+class ProjectProductionPackageResponse(BaseModel):
+    """Deterministic shot list, timings, captions and manifest for the stored script."""
+    project_id: Optional[str] = None
+    title: str
+    logline: str = ""
+    generated_at: str
+    narration: ProductionNarrationPlan
+    shots: List[ProductionShot] = []
+    total_shots: int
+    included_shots: int
+    skipped_shots: int
+    needs_source_shots: int
+    warnings: List[str] = []
+    captions_srt: str = ""
+    captions_vtt: str = ""
+    shotlist_markdown: str = ""
+    shotlist_csv: str = ""
+
+
 
 

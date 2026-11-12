@@ -15,6 +15,7 @@ import {
   ClaimStatus,
   ProjectReadiness,
   ProjectSourceSheet,
+  ProjectProductionPackage,
   ClusterCrossCheckResult,
   ClaimCacheMatch,
   MediaVerificationResult,
@@ -313,6 +314,49 @@ export const api = {
     const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/source-sheet/pdf`);
     if (!res.ok) {
       throw new Error(`[${res.status}] Failed to download PDF dossier`);
+    }
+    return res.blob();
+  },
+
+  async getProductionPackage(projectId: string): Promise<ProjectProductionPackage> {
+    const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/production-package`);
+    return handleResponse<ProjectProductionPackage>(res);
+  },
+
+  async downloadShotlist(projectId: string, format: 'md' | 'csv' = 'md'): Promise<Blob> {
+    const res = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(projectId)}/production-package/shotlist?format=${format}`
+    );
+    if (!res.ok) {
+      throw new Error(`[${res.status}] Failed to download shot list`);
+    }
+    return res.blob();
+  },
+
+  async downloadCaptions(projectId: string, format: 'srt' | 'vtt' = 'srt'): Promise<Blob> {
+    const res = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(projectId)}/production-package/captions?format=${format}`
+    );
+    if (!res.ok) {
+      throw new Error(`[${res.status}] Failed to download captions`);
+    }
+    return res.blob();
+  },
+
+  async synthesizeNarration(projectId: string): Promise<Blob> {
+    const res = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(projectId)}/production-package/narration`,
+      { method: 'POST' }
+    );
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const json = await res.json();
+        detail = json.detail || detail;
+      } catch {
+        // not JSON
+      }
+      throw new Error(`[${res.status}] ${detail}`);
     }
     return res.blob();
   },

@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.5-flash"
     GEMINI_TIMEOUT_SECONDS: float = 180.0
+    # Text-to-speech for narration audio (env: GPS_GEMINI_TTS_MODEL / GPS_GEMINI_TTS_VOICE); needs the same key.
+    GEMINI_TTS_MODEL: str = "gemini-2.5-flash-preview-tts"
+    GEMINI_TTS_VOICE: str = "Kore"
 
     # HTTP Basic auth for the whole app (env: GPS_AUTH_USERNAME / GPS_AUTH_PASSWORD); disabled when the password is empty
     AUTH_USERNAME: str = "admin"

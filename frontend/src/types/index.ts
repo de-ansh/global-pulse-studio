@@ -351,6 +351,64 @@ export interface ProjectSourceSheet {
   markdown: string;
 }
 
+export interface ProductionCitation {
+  id: string;
+  found: boolean;
+  kind?: 'article' | 'claim' | 'unknown' | string | null;
+  title?: string | null;
+  outlet?: string | null;
+  url?: string | null;
+  published_at?: string | null;
+  status?: string | null;
+  governance_type?: string | null;
+  text?: string | null;
+}
+
+export interface ProductionShot {
+  shot_number: number;
+  act_index: number;
+  act_title: string;
+  act_timecode: string;
+  beat_index: number;
+  kind: string;
+  narration: string;
+  broll?: string | null;
+  citations: ProductionCitation[];
+  needs_source: boolean;
+  included_in_timeline: boolean;
+  start_seconds?: number | null;
+  end_seconds?: number | null;
+  duration_seconds?: number | null;
+  start_timecode?: string | null;
+  end_timecode?: string | null;
+}
+
+export interface ProductionNarrationPlan {
+  voice?: string | null;
+  words_per_minute: number;
+  word_count: number;
+  estimated_runtime_seconds: number;
+  estimated_runtime_timecode: string;
+}
+
+export interface ProjectProductionPackage {
+  project_id?: string | null;
+  title: string;
+  logline: string;
+  generated_at: string;
+  narration: ProductionNarrationPlan;
+  shots: ProductionShot[];
+  total_shots: number;
+  included_shots: number;
+  skipped_shots: number;
+  needs_source_shots: number;
+  warnings: string[];
+  captions_srt: string;
+  captions_vtt: string;
+  shotlist_markdown: string;
+  shotlist_csv: string;
+}
+
 export interface ClusterCrossCheckArticle {
   id: string;
   title: string;
