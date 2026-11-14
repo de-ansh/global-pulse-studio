@@ -361,6 +361,48 @@ export const api = {
     return res.blob();
   },
 
+  getAnimaticUrl(projectId: string, options?: { withAudio?: boolean; voice?: string; download?: boolean }): string {
+    const params = new URLSearchParams();
+    if (options?.withAudio) params.set('with_audio', 'true');
+    if (options?.voice) params.set('voice', options.voice);
+    if (options?.download) params.set('download', 'true');
+    const q = params.toString() ? `?${params.toString()}` : '';
+    return `${API_BASE}/projects/${encodeURIComponent(projectId)}/production-package/animatic${q}`;
+  },
+
+  async downloadAnimatic(projectId: string, options?: { withAudio?: boolean; voice?: string }): Promise<Blob> {
+    const url = this.getAnimaticUrl(projectId, { ...options, download: true });
+    const res = await fetch(url);
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const json = await res.json();
+        detail = json.detail || detail;
+      } catch {}
+      throw new Error(`[${res.status}] ${detail}`);
+    }
+    return res.blob();
+  },
+
+  async downloadTimelineExport(
+    projectId: string,
+    format: 'fcpxml' | 'premiere' | 'edl' = 'fcpxml',
+    fps: number = 30
+  ): Promise<Blob> {
+    const res = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(projectId)}/production-package/timeline-export?format=${format}&fps=${fps}`
+    );
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const json = await res.json();
+        detail = json.detail || detail;
+      } catch {}
+      throw new Error(`[${res.status}] ${detail}`);
+    }
+    return res.blob();
+  },
+
   async crosscheckClaim(projectId: string, claimId: string): Promise<ClusterCrossCheckResult> {
     const res = await fetch(
       `${API_BASE}/projects/${encodeURIComponent(projectId)}/claims/${encodeURIComponent(claimId)}/crosscheck`,

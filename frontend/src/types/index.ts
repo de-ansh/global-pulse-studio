@@ -391,6 +391,13 @@ export interface ProductionNarrationPlan {
   estimated_runtime_timecode: string;
 }
 
+export interface ProductionToolchainStatus {
+  available: boolean;
+  ffmpeg?: string | null;
+  pillow: boolean;
+  missing: string[];
+}
+
 export interface ProjectProductionPackage {
   project_id?: string | null;
   title: string;
@@ -407,6 +414,7 @@ export interface ProjectProductionPackage {
   captions_vtt: string;
   shotlist_markdown: string;
   shotlist_csv: string;
+  render_toolchain?: ProductionToolchainStatus | null;
 }
 
 export interface ClusterCrossCheckArticle {

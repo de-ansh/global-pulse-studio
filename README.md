@@ -34,12 +34,17 @@ Global Pulse Studio transforms noisy international reporting into structured doc
    - Classifies source governance (state-controlled, state-funded, commercial wire, public broadcaster) and penalises readiness when corroboration leans on state media; state-controlled-only support can never reach `ready`.
    - Flags contradictions, unsupported statements, and `[NEEDS SOURCE]` beats before anything is recorded.
 
-5. **Video Production Package**:
+5. **Video Production Package & Watchable Draft Animatic**:
    - Turns the verified script into a per-beat **shot list** (Markdown brief and CSV spreadsheet) with citations and B-roll cues.
    - Derives a **timeline, runtime estimate, and SRT/VTT captions** from narration word counts; blocked `[NEEDS SOURCE]` beats are listed as warnings and never get timings or captions.
    - Optionally synthesises **narration audio (WAV)** with Gemini TTS, using the same key as scriptwriting.
+   - Assembles a **1080p H.264/AAC draft animatic (MP4)** from dark-slate storyboard cards rendered deterministically with Pillow and multiplexed with ffmpeg (silent or with TTS narration). Includes an in-studio interactive video preview modal with scrubbing and instant download.
 
-6. **Plug-and-Play Web Dashboard**:
+6. **Professional NLE Timeline Export**:
+   - Exports frame-accurate edit sequences directly into **Apple Final Cut Pro (FCPXML 1.9)**, **Adobe Premiere Pro (FCP 7 XML / xmeml)**, and **DaVinci Resolve / Avid (CMX 3600 EDL)**.
+   - Automatically places timed shot clips and gap items on the timeline with embedded markers for B-roll prompts, primary source citations, state-controlled media warnings, and spoken narration.
+
+7. **Plug-and-Play Web Dashboard**:
    - Zero-dependency dark-mode dashboard served directly from the FastAPI application.
 
 ---
@@ -128,7 +133,7 @@ cd backend
 PYTHONPATH=. pytest tests -v
 ```
 
-All 156 tests cover:
+All 186 tests cover:
 - HTML sanitization and URL deduplication
 - Strategic keyword and chokepoint entity extraction
 - Explainer score and severity classification
@@ -140,6 +145,8 @@ All 156 tests cover:
 - Radar API endpoints, feed seeding, and source pause/delete
 - Full creator project lifecycle: Project -> Angles -> Dossier -> 5-Act Script Outline -> Markdown Export
 - Production package: shot list, monotonic timings, captions, narration text, and blocked-beat handling
+- Draft animatic rendering: 1080p Pillow storyboard card generation, concat timeline demuxing, silent and TTS narration audio multiplexing, ffmpeg toolchain status checks, and API streaming/download endpoints
+- Professional NLE timeline exports: FCPXML 1.9, Premiere Pro xmeml, and CMX 3600 EDL formatting, SMPTE timecode/framerate math, B-roll markers, citations, and download endpoints
 - Browser dashboard serving
 
 ---

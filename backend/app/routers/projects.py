@@ -38,7 +38,7 @@ from app.schemas.project import (
     MediaVerificationRequest,
     MediaVerificationResponse,
 )
-from app.services import gemini, scriptwriter, sourcefinder, verifier, multimedia, pdf_generator, production
+from app.services import gemini, scriptwriter, sourcefinder, verifier, multimedia, pdf_generator, production, render, nle_export
 from app.services.clusterer import tokenize_title
 from app.services.fulltext import ensure_full_text, fetch_page_text, web_client
 from app.schemas.event import FactCheckResponse
@@ -1438,3 +1438,92 @@ async def synthesize_production_narration(
         media_type="audio/wav",
         headers={"Content-Disposition": f'attachment; filename="narration-{project.working_slug}.wav"'},
     )
+
+
+@router.get("/{project_id}/production-package/animatic")
+async def render_production_animatic(
+    project_id: str,
+    with_audio: bool = False,
+    voice: Optional[str] = None,
+    download: bool = False,
+    db: AsyncSession = Depends(get_db),
+):
+    """Render a watchable 16:9 H.264/AAC MP4 draft animatic from the stored script.
+
+    Multiplexes optional Gemini TTS narration audio when ``with_audio=True``; otherwise assembles against
+    a silent track. Blocked [NEEDS SOURCE] beats never enter the render.
+    """
+    project = await _get_scripted_project_or_404(db, project_id)
+    toolchain = render.toolchain_status()
+    if not toolchain["available"]:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Render toolchain missing: {', '.join(toolchain['missing'])}. {render.INSTALL_HINT}",
+        )
+
+    package = production.build_production_package(project.script, voice=voice or settings.GEMINI_TTS_VOICE or None)
+    audio_bytes: Optional[bytes] = None
+    if with_audio:
+        text = production.narration_text(package)
+        if not text:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Nothing to narrate: every beat is blocked on a missing source or the script has no beats.",
+            )
+        audio_bytes = await gemini.request_audio(text, voice=voice or settings.GEMINI_TTS_VOICE or None)
+
+    try:
+        res = render.render_animatic(package, audio_bytes=audio_bytes)
+    except render.NothingToRender as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except render.RenderUnavailable as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except render.RenderFailed as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+    disposition = "attachment" if download else "inline"
+    return Response(
+        content=res["video"],
+        media_type="video/mp4",
+        headers={"Content-Disposition": f'{disposition}; filename="animatic-{project.working_slug}.mp4"'},
+    )
+
+
+@router.get("/{project_id}/production-package/timeline-export")
+async def download_timeline_export(
+    project_id: str,
+    format: str = "fcpxml",
+    fps: int = 30,
+    db: AsyncSession = Depends(get_db),
+):
+    """Export the verified script timeline into FCPXML, Premiere Pro XML, or CMX 3600 EDL.
+
+    Places timed beats, B-roll cue markers, citations, and risk warnings directly onto
+    the editing sequence. Blocked [NEEDS SOURCE] beats are excluded.
+    """
+    if format not in nle_export.SUPPORTED_FORMATS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported format '{format}'. Choose from: {', '.join(sorted(nle_export.SUPPORTED_FORMATS))}.",
+        )
+    if fps not in nle_export.SUPPORTED_FPS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported framerate {fps} fps. Choose from: {', '.join(map(str, sorted(nle_export.SUPPORTED_FPS)))}.",
+        )
+    project = await _get_scripted_project_or_404(db, project_id)
+    package = production.build_production_package(project.script)
+    try:
+        exported = nle_export.build_nle_export(package, format=format, fps=fps)
+    except nle_export.NothingToExport as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+    return Response(
+        content=exported["content"],
+        media_type=f"{exported['media_type']}; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="timeline-{project.working_slug}.{exported["extension"]}"'
+        },
+    )
+
+

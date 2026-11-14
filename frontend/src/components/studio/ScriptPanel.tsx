@@ -13,9 +13,12 @@ import {
   Captions,
   Mic,
   Clapperboard,
+  Film,
+  Layers,
 } from 'lucide-react';
 import { SupportVerdict, VERDICT_STYLES } from './SupportVerdict';
 import { AI_DISABLED_HINT, useFeatures } from '../../features';
+import { AnimaticModal } from './AnimaticModal';
 
 interface ScriptPanelProps {
   projectId: string;
@@ -86,6 +89,7 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
   const [pkg, setPkg] = useState<ProjectProductionPackage | null>(null);
   const [narrating, setNarrating] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [animaticModalOpen, setAnimaticModalOpen] = useState(false);
 
   useEffect(() => {
     setScript(null);
@@ -197,6 +201,18 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
       setError(err.message);
     } finally {
       setNarrating(false);
+    }
+  };
+
+  const downloadTimeline = async (format: 'fcpxml' | 'premiere' | 'edl', ext: string) => {
+    setDownloading(`timeline-${format}`);
+    setError(null);
+    try {
+      saveBlob(await api.downloadTimelineExport(projectId, format, 30), `${fileStem}-timeline.${ext}`);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setDownloading(null);
     }
   };
 
@@ -331,6 +347,19 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
                     <Mic className={`w-3 h-3 ${narrating ? 'animate-pulse' : ''}`} />
                     <span>{narrating ? 'Synthesizing...' : 'Narration .wav'}</span>
                   </button>
+                  <button
+                    onClick={() => setAnimaticModalOpen(true)}
+                    disabled={downloading !== null || (pkg.render_toolchain ? !pkg.render_toolchain.available : false)}
+                    title={
+                      pkg.render_toolchain && !pkg.render_toolchain.available
+                        ? `Render unavailable: missing ${pkg.render_toolchain.missing.join(', ')}`
+                        : undefined
+                    }
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition disabled:opacity-60"
+                  >
+                    <Film className="w-3 h-3" />
+                    <span>Animatic .mp4</span>
+                  </button>
                 </div>
               </div>
 
@@ -366,6 +395,40 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
                   ))}
                 </ul>
               )}
+
+              <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-800/80">
+                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider mr-1 flex items-center gap-1">
+                  <Layers className="w-3 h-3 text-slate-400" />
+                  <span>NLE Timeline:</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => downloadTimeline('premiere', 'xml')}
+                  disabled={downloading !== null}
+                  title="Import into Adobe Premiere Pro or DaVinci Resolve (FCP 7 xmeml)"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition disabled:opacity-50"
+                >
+                  <span>{downloading === 'timeline-premiere' ? 'Saving...' : 'Premiere (.xml)'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadTimeline('fcpxml', 'fcpxml')}
+                  disabled={downloading !== null}
+                  title="Import into Apple Final Cut Pro or DaVinci Resolve (FCPXML 1.9)"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition disabled:opacity-50"
+                >
+                  <span>{downloading === 'timeline-fcpxml' ? 'Saving...' : 'Final Cut (.fcpxml)'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadTimeline('edl', 'edl')}
+                  disabled={downloading !== null}
+                  title="Import into DaVinci Resolve or Avid Media Composer (CMX 3600 EDL)"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition disabled:opacity-50"
+                >
+                  <span>{downloading === 'timeline-edl' ? 'Saving...' : 'DaVinci (.edl)'}</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -439,6 +502,17 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
             </ul>
           </details>
         </>
+      )}
+
+      {pkg && (
+        <AnimaticModal
+          isOpen={animaticModalOpen}
+          onClose={() => setAnimaticModalOpen(false)}
+          projectId={projectId}
+          projectTitle={script?.content.title || 'Documentary Script'}
+          pkg={pkg}
+          hasAi={features.ai}
+        />
       )}
     </div>
   );

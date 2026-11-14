@@ -304,6 +304,13 @@ class ProductionNarrationPlan(BaseModel):
     estimated_runtime_timecode: str
 
 
+class ProductionToolchainStatus(BaseModel):
+    available: bool = True
+    ffmpeg: Optional[str] = None
+    pillow: bool = True
+    missing: List[str] = []
+
+
 class ProjectProductionPackageResponse(BaseModel):
     """Deterministic shot list, timings, captions and manifest for the stored script."""
     project_id: Optional[str] = None
@@ -321,6 +328,8 @@ class ProjectProductionPackageResponse(BaseModel):
     captions_vtt: str = ""
     shotlist_markdown: str = ""
     shotlist_csv: str = ""
+    render_toolchain: Optional[ProductionToolchainStatus] = None
+
 
 
 

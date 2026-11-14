@@ -296,6 +296,11 @@ def build_production_package(script: Any, *, voice: Optional[str] = None) -> Dic
     package["captions_vtt"] = _captions(package, "vtt")
     package["shotlist_markdown"] = _shotlist_markdown(package)
     package["shotlist_csv"] = _shotlist_csv(package)
+    try:
+        from app.services.render import toolchain_status
+        package["render_toolchain"] = toolchain_status()
+    except Exception:  # pragma: no cover
+        package["render_toolchain"] = {"available": False, "missing": ["render_service"]}
     return package
 
 
