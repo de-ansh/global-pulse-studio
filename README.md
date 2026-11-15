@@ -44,7 +44,12 @@ Global Pulse Studio transforms noisy international reporting into structured doc
    - Exports frame-accurate edit sequences directly into **Apple Final Cut Pro (FCPXML 1.9)**, **Adobe Premiere Pro (FCP 7 XML / xmeml)**, and **DaVinci Resolve / Avid (CMX 3600 EDL)**.
    - Automatically places timed shot clips and gap items on the timeline with embedded markers for B-roll prompts, primary source citations, state-controlled media warnings, and spoken narration.
 
-7. **Plug-and-Play Web Dashboard**:
+7. **B-Roll & Media Asset Staging**:
+   - Upload and attach custom visual assets (satellite passes, photos, charts) to individual beats directly in Story Studio.
+   - Pillow compositor scales and overlays staged B-roll onto 1080p animatic video cards with documentary lower thirds and attribution credits.
+   - Automatically links media file paths into FCPXML and Premiere Pro XML timeline exports for instant NLE relinking.
+
+8. **Plug-and-Play Web Dashboard**:
    - Zero-dependency dark-mode dashboard served directly from the FastAPI application.
 
 ---
@@ -133,7 +138,7 @@ cd backend
 PYTHONPATH=. pytest tests -v
 ```
 
-All 186 tests cover:
+All 193 tests cover:
 - HTML sanitization and URL deduplication
 - Strategic keyword and chokepoint entity extraction
 - Explainer score and severity classification
@@ -147,6 +152,7 @@ All 186 tests cover:
 - Production package: shot list, monotonic timings, captions, narration text, and blocked-beat handling
 - Draft animatic rendering: 1080p Pillow storyboard card generation, concat timeline demuxing, silent and TTS narration audio multiplexing, ffmpeg toolchain status checks, and API streaming/download endpoints
 - Professional NLE timeline exports: FCPXML 1.9, Premiere Pro xmeml, and CMX 3600 EDL formatting, SMPTE timecode/framerate math, B-roll markers, citations, and download endpoints
+- B-roll media asset staging: multipart image uploads, Pillow visual compositing, and NLE media relinking
 - Browser dashboard serving
 
 ---

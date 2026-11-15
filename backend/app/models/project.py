@@ -36,6 +36,7 @@ class Project(Base):
     dossier: Mapped[Optional["Dossier"]] = relationship("Dossier", back_populates="project", uselist=False, cascade="all, delete-orphan")
     script_outline: Mapped[Optional["ScriptOutline"]] = relationship("ScriptOutline", back_populates="project", uselist=False, cascade="all, delete-orphan")
     script: Mapped[Optional["Script"]] = relationship("Script", back_populates="project", uselist=False, cascade="all, delete-orphan")
+    media_assets: Mapped[list["MediaAsset"]] = relationship("MediaAsset", back_populates="project", cascade="all, delete-orphan", lazy="selectin")
 
 
 class Dossier(Base):
@@ -138,4 +139,25 @@ class VerifiedClaimCache(Base):
     evidence: Mapped[list] = mapped_column(JSON, default=list)
     verified_in_project_id: Mapped[str] = mapped_column(String(64), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class MediaAsset(Base):
+    """A visual B-roll asset (image/still/graphic) staged for a specific project and shot."""
+    __tablename__ = "media_assets"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=False)
+    shot_number: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(256), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, default=0)
+    file_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    caption: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    source_credit: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    project: Mapped["Project"] = relationship("Project", back_populates="media_assets")
+
 

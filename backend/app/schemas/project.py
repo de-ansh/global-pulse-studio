@@ -276,6 +276,28 @@ class ProductionCitation(BaseModel):
     text: Optional[str] = None
 
 
+class MediaAssetResponse(BaseModel):
+    """A visual B-roll asset staged for a shot."""
+    id: str
+    project_id: str
+    shot_number: int
+    filename: str
+    content_type: str
+    file_size: int
+    caption: Optional[str] = None
+    source_credit: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    url: str
+    created_at: str
+
+
+class MediaAssetUpdateRequest(BaseModel):
+    caption: Optional[str] = None
+    source_credit: Optional[str] = None
+    shot_number: Optional[int] = None
+
+
 class ProductionShot(BaseModel):
     """One beat as an editor-ready shot, with timings only when it is not blocked on a source."""
     shot_number: int
@@ -294,6 +316,8 @@ class ProductionShot(BaseModel):
     duration_seconds: Optional[float] = None
     start_timecode: Optional[str] = None
     end_timecode: Optional[str] = None
+    media_asset: Optional[MediaAssetResponse] = None
+
 
 
 class ProductionNarrationPlan(BaseModel):

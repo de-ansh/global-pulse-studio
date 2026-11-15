@@ -19,6 +19,7 @@ import {
   ClusterCrossCheckResult,
   ClaimCacheMatch,
   MediaVerificationResult,
+  MediaAsset,
 } from '../types';
 
 const API_BASE = '/api';
@@ -436,5 +437,40 @@ export const api = {
       }
     );
     return handleResponse<MediaVerificationResult>(res);
+  },
+
+  async getProjectAssets(projectId: string): Promise<MediaAsset[]> {
+    const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/assets`);
+    return handleResponse<MediaAsset[]>(res);
+  },
+
+  async uploadAsset(
+    projectId: string,
+    shotNumber: number,
+    file: File,
+    caption?: string,
+    sourceCredit?: string
+  ): Promise<MediaAsset> {
+    const formData = new FormData();
+    formData.append('shot_number', shotNumber.toString());
+    formData.append('file', file);
+    if (caption) formData.append('caption', caption);
+    if (sourceCredit) formData.append('source_credit', sourceCredit);
+
+    const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/assets`, {
+      method: 'POST',
+      body: formData,
+    });
+    return handleResponse<MediaAsset>(res);
+  },
+
+  async deleteAsset(projectId: string, assetId: string): Promise<void> {
+    const res = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}`,
+      { method: 'DELETE' }
+    );
+    if (!res.ok) {
+      throw new Error(`[${res.status}] Failed to delete asset`);
+    }
   },
 };

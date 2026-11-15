@@ -211,10 +211,34 @@ def _citation_label(citation: Dict[str, Any]) -> str:
 
 
 def _draw_shot_card(shot: Dict[str, Any], path: Path, *, total_shots: int, total_seconds: float) -> None:
-    """Draw one 16:9 dark-slate card summarising a shot."""
+    """Draw one 16:9 card summarising a shot, compositing staged B-roll imagery if attached."""
     from PIL import Image, ImageDraw
 
-    image = Image.new("RGB", (WIDTH, HEIGHT), BG)
+    media_asset = shot.get("media_asset")
+    bg_image = None
+    if media_asset and media_asset.get("file_path"):
+        try:
+            asset_path = Path(media_asset["file_path"])
+            if asset_path.exists() and asset_path.is_file():
+                with Image.open(asset_path) as raw_img:
+                    raw_rgb = raw_img.convert("RGB")
+                    src_w, src_h = raw_rgb.size
+                    scale = max(WIDTH / src_w, HEIGHT / src_h)
+                    new_w, new_h = int(src_w * scale), int(src_h * scale)
+                    resized = raw_rgb.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                    crop_x = (new_w - WIDTH) // 2
+                    crop_y = (new_h - HEIGHT) // 2
+                    bg_image = resized.crop((crop_x, crop_y, crop_x + WIDTH, crop_y + HEIGHT))
+        except Exception:
+            bg_image = None
+
+    if bg_image is not None:
+        # Subtle dark veil (175/255 opacity) keeps white text and badges broadcast-legible
+        overlay = Image.new("RGBA", (WIDTH, HEIGHT), (15, 23, 42, 175))
+        image = Image.alpha_composite(bg_image.convert("RGBA"), overlay).convert("RGB")
+    else:
+        image = Image.new("RGB", (WIDTH, HEIGHT), BG)
+
     draw = ImageDraw.Draw(image, "RGBA")
 
     kind_color = KIND_COLORS.get(shot.get("kind") or "fact", ACCENT)
@@ -269,7 +293,8 @@ def _draw_shot_card(shot: Dict[str, Any], path: Path, *, total_shots: int, total
     draw.line((MARGIN, 792, WIDTH - MARGIN, 792), fill=RULE, width=2)
 
     # B-roll cue.
-    draw.text((MARGIN, 820), "B-ROLL", font=_font("bold", 24), fill=AMBER)
+    broll_label = "B-ROLL (STAGED)" if media_asset else "B-ROLL"
+    draw.text((MARGIN, 820), broll_label, font=_font("bold", 24), fill=ACCENT if media_asset else AMBER)
     broll = _clean_text(shot.get("broll") or "") or "No B-roll cue"
     broll_lines = _wrap_text(broll, body_font, body_width - 190)
     for i, line in enumerate(broll_lines[:2]):
@@ -307,6 +332,9 @@ def _draw_shot_card(shot: Dict[str, Any], path: Path, *, total_shots: int, total
 
     footer = f"GLOBAL PULSE STUDIO · DRAFT ANIMATIC · {format_clock(shot.get('start_seconds') or 0)}"
     draw.text((MARGIN, 1042), footer, font=mono_tiny, fill=DIM)
+    if media_asset and media_asset.get("source_credit"):
+        credit_str = f"VISUAL: {media_asset['source_credit']}".upper()
+        draw.text((WIDTH - MARGIN - mono_tiny.getlength(credit_str), 1014), credit_str, font=mono_tiny, fill=AMBER)
     runtime = f"runtime {format_runtime(total_seconds)}"
     draw.text((WIDTH - MARGIN - mono_tiny.getlength(runtime), 1042), runtime, font=mono_tiny, fill=DIM)
 
