@@ -6,4 +6,5 @@ __pycache__/
 .venv/
 *.db
 .env
+media_uploads/
 .DS_Store

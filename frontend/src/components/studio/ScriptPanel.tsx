@@ -15,6 +15,9 @@ import {
   Clapperboard,
   Film,
   Layers,
+  Image as ImageIcon,
+  Upload,
+  Trash2,
 } from 'lucide-react';
 import { SupportVerdict, VERDICT_STYLES } from './SupportVerdict';
 import { AI_DISABLED_HINT, useFeatures } from '../../features';
@@ -90,6 +93,7 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
   const [narrating, setNarrating] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [animaticModalOpen, setAnimaticModalOpen] = useState(false);
+  const [uploadingShot, setUploadingShot] = useState<number | null>(null);
 
   useEffect(() => {
     setScript(null);
@@ -213,6 +217,33 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
       setError(err.message);
     } finally {
       setDownloading(null);
+    }
+  };
+
+  const handleUploadBroll = async (shotNumber: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingShot(shotNumber);
+    setError(null);
+    try {
+      await api.uploadAsset(projectId, shotNumber, file);
+      const updatedPkg = await api.getProductionPackage(projectId);
+      setPkg(updatedPkg);
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload B-roll asset.');
+    } finally {
+      setUploadingShot(null);
+    }
+  };
+
+  const handleDeleteBroll = async (assetId: string) => {
+    setError(null);
+    try {
+      await api.deleteAsset(projectId, assetId);
+      const updatedPkg = await api.getProductionPackage(projectId);
+      setPkg(updatedPkg);
+    } catch (err: any) {
+      setError(err.message || 'Failed to remove B-roll asset.');
     }
   };
 
@@ -442,32 +473,88 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
               <h5 className="font-mono text-xs font-bold text-purple-300">
                 {act.title} <span className="text-slate-500">({act.timecode})</span>
               </h5>
-              {act.beats.map((beat, bi) => (
-                <div
-                  key={bi}
-                  className={`p-3 rounded-xl bg-slate-950/70 border ${beat.issues?.length ? 'border-amber-700/50' : 'border-slate-800'} space-y-1.5`}
-                >
-                  <div className="flex items-start gap-2">
-                    <span className={`shrink-0 px-1.5 py-0.5 rounded border text-[9px] font-mono uppercase ${KIND_STYLES[beat.kind] || KIND_STYLES.transition}`}>
-                      {beat.kind}
-                    </span>
-                    <p className="text-sm text-slate-100 leading-relaxed">{beat.narration}</p>
-                  </div>
-                  {(beat.citations?.length > 0 || beat.broll) && (
-                    <div className="flex flex-wrap items-center gap-1.5 pl-1">
-                      {beat.citations?.map((c) => <CitationChip key={c} id={c} source={sourcesById[c]} />)}
-                      {beat.broll && <span className="text-[11px] text-slate-500 italic">B-roll: {beat.broll}</span>}
+              {act.beats.map((beat, bi) => {
+                const shot = pkg?.shots.find((s) => s.act_index === ai + 1 && s.beat_index === bi + 1);
+                return (
+                  <div
+                    key={bi}
+                    className={`p-3 rounded-xl bg-slate-950/70 border ${beat.issues?.length ? 'border-amber-700/50' : 'border-slate-800'} space-y-1.5`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className={`shrink-0 px-1.5 py-0.5 rounded border text-[9px] font-mono uppercase ${KIND_STYLES[beat.kind] || KIND_STYLES.transition}`}>
+                        {beat.kind}
+                      </span>
+                      <p className="text-sm text-slate-100 leading-relaxed">{beat.narration}</p>
                     </div>
-                  )}
-                  {beat.support && <SupportVerdict result={beat.support} sources={sourcesById} />}
-                  {beat.issues?.map((issue, ii) => (
-                    <p key={ii} className="flex items-center gap-1.5 text-[11px] font-mono text-amber-300">
-                      <AlertTriangle className="w-3 h-3 shrink-0" />
-                      <span>{issue}</span>
-                    </p>
-                  ))}
-                </div>
-              ))}
+                    {(beat.citations?.length > 0 || beat.broll) && (
+                      <div className="flex flex-wrap items-center gap-1.5 pl-1">
+                        {beat.citations?.map((c) => <CitationChip key={c} id={c} source={sourcesById[c]} />)}
+                        {beat.broll && <span className="text-[11px] text-slate-500 italic">B-roll: {beat.broll}</span>}
+                      </div>
+                    )}
+                    {beat.support && <SupportVerdict result={beat.support} sources={sourcesById} />}
+                    {beat.issues?.map((issue, ii) => (
+                      <p key={ii} className="flex items-center gap-1.5 text-[11px] font-mono text-amber-300">
+                        <AlertTriangle className="w-3 h-3 shrink-0" />
+                        <span>{issue}</span>
+                      </p>
+                    ))}
+
+                    {shot && (
+                      <div className="mt-2 pt-2 border-t border-slate-800/60 flex items-center justify-between gap-2 text-xs font-mono">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          {shot.media_asset ? (
+                            <div className="flex items-center gap-2">
+                              <img
+                                src={shot.media_asset.url}
+                                alt={shot.media_asset.filename}
+                                className="w-10 h-7 object-cover rounded border border-slate-700 shrink-0"
+                              />
+                              <div className="truncate">
+                                <span className="text-emerald-400 font-semibold text-[10px] block">VISUAL STAGED</span>
+                                <span className="text-slate-400 text-[10px] truncate block">{shot.media_asset.filename}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-slate-500 text-[10px] flex items-center gap-1">
+                              <ImageIcon className="w-3 h-3 text-slate-600" />
+                              <span>No visual staged</span>
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <label className={`cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border transition ${
+                            shot.media_asset
+                              ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                              : 'bg-indigo-950/60 hover:bg-indigo-900/60 text-indigo-300 border-indigo-800/60'
+                          }`}>
+                            <Upload className="w-2.5 h-2.5" />
+                            <span>{uploadingShot === shot.shot_number ? 'Staging...' : shot.media_asset ? 'Replace' : 'Stage B-roll'}</span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp"
+                              className="hidden"
+                              disabled={uploadingShot !== null}
+                              onChange={(e) => handleUploadBroll(shot.shot_number, e)}
+                            />
+                          </label>
+                          {shot.media_asset && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteBroll(shot.media_asset!.id)}
+                              className="p-1 text-slate-500 hover:text-red-400 rounded transition"
+                              title="Remove staged visual"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ))}
 

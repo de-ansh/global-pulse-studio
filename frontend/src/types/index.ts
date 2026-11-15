@@ -364,6 +364,21 @@ export interface ProductionCitation {
   text?: string | null;
 }
 
+export interface MediaAsset {
+  id: string;
+  project_id: string;
+  shot_number: number;
+  filename: string;
+  content_type: string;
+  file_size: number;
+  caption?: string | null;
+  source_credit?: string | null;
+  width?: number | null;
+  height?: number | null;
+  url: string;
+  created_at: string;
+}
+
 export interface ProductionShot {
   shot_number: number;
   act_index: number;
@@ -381,6 +396,7 @@ export interface ProductionShot {
   duration_seconds?: number | null;
   start_timecode?: string | null;
   end_timecode?: string | null;
+  media_asset?: MediaAsset | null;
 }
 
 export interface ProductionNarrationPlan {

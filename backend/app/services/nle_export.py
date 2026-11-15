@@ -127,9 +127,9 @@ def export_fcpxml(package: Dict[str, Any], fps: int = 30) -> str:
     spine = ET.SubElement(sequence, "spine")
 
     cursor_frame = 0
-    for shot in shots:
+    for idx, shot in enumerate(shots, start=1):
         dur_frames = seconds_to_frames(shot.get("duration_seconds") or 0, fps)
-        shot_num = int(shot.get("shot_number") or 0)
+        shot_num = int(shot.get("shot_number") or idx)
         act = _clean(shot.get("act_title") or "Act")
         kind = _clean(shot.get("kind") or "fact")
         shot_label = f"SHOT {shot_num:02d}: {act} ({kind})"
@@ -144,6 +144,29 @@ def export_fcpxml(package: Dict[str, Any], fps: int = 30) -> str:
                 "start": "0s",
             },
         )
+
+        media_asset = shot.get("media_asset")
+        if media_asset and media_asset.get("file_path"):
+            ET.SubElement(
+                resources,
+                "asset",
+                {
+                    "id": f"asset-{idx}",
+                    "name": media_asset.get("filename") or f"asset-{idx}",
+                    "src": f"file://{media_asset['file_path']}",
+                    "format": "r1",
+                },
+            )
+            ET.SubElement(
+                gap,
+                "marker",
+                {
+                    "start": "0s",
+                    "duration": f"1/{fps}s",
+                    "value": f"MEDIA: {media_asset.get('filename')}",
+                    "note": f"Staged file: {media_asset.get('file_path')}",
+                },
+            )
 
         # B-roll cue marker
         broll = _clean(shot.get("broll"))
@@ -242,6 +265,21 @@ def export_premiere_xml(package: Dict[str, Any], fps: int = 30) -> str:
         ET.SubElement(clip, "in").text = "0"
         ET.SubElement(clip, "out").text = str(dur_frames)
 
+        media_asset = shot.get("media_asset")
+        if media_asset and media_asset.get("file_path"):
+            f_elem = ET.SubElement(clip, "file", {"id": f"file-{idx}"})
+            ET.SubElement(f_elem, "name").text = media_asset.get("filename") or f"asset-{idx}"
+            ET.SubElement(f_elem, "pathurl").text = f"file://{media_asset['file_path']}"
+            f_rate = ET.SubElement(f_elem, "rate")
+            ET.SubElement(f_rate, "timebase").text = str(fps)
+            ET.SubElement(f_rate, "ntsc").text = "FALSE"
+            ET.SubElement(f_elem, "duration").text = str(dur_frames)
+            f_media = ET.SubElement(f_elem, "media")
+            f_video = ET.SubElement(f_media, "video")
+            f_sc = ET.SubElement(f_video, "samplecharacteristics")
+            ET.SubElement(f_sc, "width").text = "1920"
+            ET.SubElement(f_sc, "height").text = "1080"
+
         # B-roll marker
         broll = _clean(shot.get("broll"))
         if broll:
@@ -304,6 +342,12 @@ def export_edl(package: Dict[str, Any], fps: int = 30) -> str:
         broll = _clean(shot.get("broll"))
         if broll:
             lines.append(f"* B-ROLL: {broll}")
+
+        media_asset = shot.get("media_asset")
+        if media_asset and media_asset.get("filename"):
+            lines.append(f"* STAGED ASSET: {media_asset['filename']}")
+            if media_asset.get("source_credit"):
+                lines.append(f"* SOURCE CREDIT: {media_asset['source_credit']}")
 
         citations = shot.get("citations") or []
         if citations:

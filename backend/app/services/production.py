@@ -190,7 +190,12 @@ def _captions(package: Dict[str, Any], fmt: str) -> str:
     return body + ("\n" if body else "")
 
 
-def build_production_package(script: Any, *, voice: Optional[str] = None) -> Dict[str, Any]:
+def build_production_package(
+    script: Any,
+    *,
+    voice: Optional[str] = None,
+    assets: Optional[List[Any]] = None,
+) -> Dict[str, Any]:
     """Build the full production package from a stored ``Script`` row.
 
     ``script`` only needs ``content`` and ``sources`` attributes, which keeps this testable without a DB.
@@ -198,6 +203,17 @@ def build_production_package(script: Any, *, voice: Optional[str] = None) -> Dic
     content = getattr(script, "content", None) or {}
     sources = getattr(script, "sources", None) or []
     by_id = {s.get("id"): s for s in sources if isinstance(s, dict) and s.get("id")}
+
+    assets_list = assets if assets is not None else (
+        getattr(script, "media_assets", None)
+        or getattr(getattr(script, "project", None), "media_assets", None)
+        or []
+    )
+    assets_by_shot = {}
+    for a in assets_list:
+        s_num = a.shot_number if hasattr(a, "shot_number") else a.get("shot_number")
+        if s_num is not None:
+            assets_by_shot[s_num] = a
 
     shots: List[Dict[str, Any]] = []
     warnings: List[str] = []
@@ -247,7 +263,32 @@ def build_production_package(script: Any, *, voice: Optional[str] = None) -> Dic
                 "duration_seconds": None,
                 "start_timecode": None,
                 "end_timecode": None,
+                "media_asset": None,
             }
+
+            if shot_number in assets_by_shot:
+                a = assets_by_shot[shot_number]
+                aid = a.id if hasattr(a, "id") else a.get("id")
+                pid = a.project_id if hasattr(a, "project_id") else a.get("project_id", getattr(script, "project_id", ""))
+                shot["media_asset"] = {
+                    "id": aid,
+                    "project_id": pid,
+                    "shot_number": shot_number,
+                    "filename": a.filename if hasattr(a, "filename") else a.get("filename", ""),
+                    "content_type": a.content_type if hasattr(a, "content_type") else a.get("content_type", ""),
+                    "file_size": a.file_size if hasattr(a, "file_size") else a.get("file_size", 0),
+                    "file_path": a.file_path if hasattr(a, "file_path") else a.get("file_path", ""),
+                    "caption": getattr(a, "caption", None) or (a.get("caption") if isinstance(a, dict) else None),
+                    "source_credit": getattr(a, "source_credit", None) or (a.get("source_credit") if isinstance(a, dict) else None),
+                    "width": getattr(a, "width", None) or (a.get("width") if isinstance(a, dict) else None),
+                    "height": getattr(a, "height", None) or (a.get("height") if isinstance(a, dict) else None),
+                    "url": f"/api/projects/{pid}/assets/{aid}/file",
+                    "created_at": (
+                        a.created_at.isoformat()
+                        if hasattr(a, "created_at") and getattr(a, "created_at", None) and hasattr(a.created_at, "isoformat")
+                        else str(getattr(a, "created_at", None) or (a.get("created_at") if isinstance(a, dict) else "") or "")
+                    ),
+                }
 
             if needs_source:
                 skipped += 1

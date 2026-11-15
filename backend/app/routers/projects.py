@@ -5,15 +5,16 @@ import re
 import uuid
 from typing import List, Optional
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import PlainTextResponse, Response
+from pathlib import Path
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form
+from fastapi.responses import PlainTextResponse, Response, FileResponse
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import get_db
-from app.models.project import Project, Dossier, ScriptOutline, Claim, ClaimCheck, Script, VerifiedClaimCache
+from app.models.project import Project, Dossier, ScriptOutline, Claim, ClaimCheck, Script, VerifiedClaimCache, MediaAsset
 from app.models.event import EventCluster
 from app.models.source import Article
 from app.schemas.project import (
@@ -33,6 +34,8 @@ from app.schemas.project import (
     ProjectSourceSheetResponse,
     SourceSheetCitation,
     ProjectProductionPackageResponse,
+    MediaAssetResponse,
+    MediaAssetUpdateRequest,
     ClusterCrossCheckResponse,
     ClaimCacheMatchResponse,
     MediaVerificationRequest,
@@ -1353,8 +1356,12 @@ def _script_markdown(script: Script) -> List[str]:
 
 
 async def _get_scripted_project_or_404(db: AsyncSession, project_id: str) -> Project:
-    """Load a project with its script; 404 when the project or the script is missing."""
-    stmt = select(Project).options(selectinload(Project.script)).where(Project.id == project_id)
+    """Load a project with its script and staged assets; 404 when missing."""
+    stmt = (
+        select(Project)
+        .options(selectinload(Project.script), selectinload(Project.media_assets))
+        .where(Project.id == project_id)
+    )
     project = (await db.execute(stmt)).scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
@@ -1370,7 +1377,9 @@ async def _get_scripted_project_or_404(db: AsyncSession, project_id: str) -> Pro
 async def get_production_package(project_id: str, voice: Optional[str] = None, db: AsyncSession = Depends(get_db)):
     """Deterministic shot list, timings, captions and render manifest for the stored script."""
     project = await _get_scripted_project_or_404(db, project_id)
-    return production.build_production_package(project.script, voice=voice or settings.GEMINI_TTS_VOICE or None)
+    return production.build_production_package(
+        project.script, voice=voice or settings.GEMINI_TTS_VOICE or None, assets=project.media_assets
+    )
 
 
 @router.get("/{project_id}/production-package/shotlist")
@@ -1383,7 +1392,7 @@ async def download_production_shotlist(
     if format not in {"md", "csv"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="format must be 'md' or 'csv'.")
     project = await _get_scripted_project_or_404(db, project_id)
-    package = production.build_production_package(project.script)
+    package = production.build_production_package(project.script, assets=project.media_assets)
     if format == "csv":
         body, media_type, ext = package["shotlist_csv"], "text/csv", "csv"
     else:
@@ -1405,7 +1414,7 @@ async def download_production_captions(
     if format not in {"srt", "vtt"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="format must be 'srt' or 'vtt'.")
     project = await _get_scripted_project_or_404(db, project_id)
-    package = production.build_production_package(project.script)
+    package = production.build_production_package(project.script, assets=project.media_assets)
     body = package["captions_srt"] if format == "srt" else package["captions_vtt"]
     return Response(
         content=body,
@@ -1420,12 +1429,11 @@ async def synthesize_production_narration(
     voice: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """Synthesise narration audio (WAV) for the timeline beats via Gemini TTS.
-
-    Returns 503 when no Gemini key is configured and 409 when there is nothing recordable (all beats blocked).
-    """
+    """Synthesise narration audio (WAV) for the timeline beats via Gemini TTS."""
     project = await _get_scripted_project_or_404(db, project_id)
-    package = production.build_production_package(project.script, voice=voice or settings.GEMINI_TTS_VOICE or None)
+    package = production.build_production_package(
+        project.script, voice=voice or settings.GEMINI_TTS_VOICE or None, assets=project.media_assets
+    )
     text = production.narration_text(package)
     if not text:
         raise HTTPException(
@@ -1448,11 +1456,7 @@ async def render_production_animatic(
     download: bool = False,
     db: AsyncSession = Depends(get_db),
 ):
-    """Render a watchable 16:9 H.264/AAC MP4 draft animatic from the stored script.
-
-    Multiplexes optional Gemini TTS narration audio when ``with_audio=True``; otherwise assembles against
-    a silent track. Blocked [NEEDS SOURCE] beats never enter the render.
-    """
+    """Render a watchable 16:9 H.264/AAC MP4 draft animatic from the stored script and staged assets."""
     project = await _get_scripted_project_or_404(db, project_id)
     toolchain = render.toolchain_status()
     if not toolchain["available"]:
@@ -1461,7 +1465,9 @@ async def render_production_animatic(
             detail=f"Render toolchain missing: {', '.join(toolchain['missing'])}. {render.INSTALL_HINT}",
         )
 
-    package = production.build_production_package(project.script, voice=voice or settings.GEMINI_TTS_VOICE or None)
+    package = production.build_production_package(
+        project.script, voice=voice or settings.GEMINI_TTS_VOICE or None, assets=project.media_assets
+    )
     audio_bytes: Optional[bytes] = None
     if with_audio:
         text = production.narration_text(package)
@@ -1496,11 +1502,7 @@ async def download_timeline_export(
     fps: int = 30,
     db: AsyncSession = Depends(get_db),
 ):
-    """Export the verified script timeline into FCPXML, Premiere Pro XML, or CMX 3600 EDL.
-
-    Places timed beats, B-roll cue markers, citations, and risk warnings directly onto
-    the editing sequence. Blocked [NEEDS SOURCE] beats are excluded.
-    """
+    """Export the verified script timeline into FCPXML, Premiere Pro XML, or CMX 3600 EDL."""
     if format not in nle_export.SUPPORTED_FORMATS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1512,7 +1514,7 @@ async def download_timeline_export(
             detail=f"Unsupported framerate {fps} fps. Choose from: {', '.join(map(str, sorted(nle_export.SUPPORTED_FPS)))}.",
         )
     project = await _get_scripted_project_or_404(db, project_id)
-    package = production.build_production_package(project.script)
+    package = production.build_production_package(project.script, assets=project.media_assets)
     try:
         exported = nle_export.build_nle_export(package, format=format, fps=fps)
     except nle_export.NothingToExport as exc:
@@ -1525,5 +1527,141 @@ async def download_timeline_export(
             "Content-Disposition": f'attachment; filename="timeline-{project.working_slug}.{exported["extension"]}"'
         },
     )
+
+
+# ============================================================================
+# B-Roll Media Asset Staging Endpoints
+# ============================================================================
+
+UPLOAD_DIR = Path("media_uploads")
+
+
+def _to_asset_response(asset: MediaAsset) -> MediaAssetResponse:
+    """Format a MediaAsset row into an API response schema."""
+    return MediaAssetResponse(
+        id=asset.id,
+        project_id=asset.project_id,
+        shot_number=asset.shot_number,
+        filename=asset.filename,
+        content_type=asset.content_type,
+        file_size=asset.file_size,
+        caption=asset.caption,
+        source_credit=asset.source_credit,
+        width=asset.width,
+        height=asset.height,
+        url=f"/api/projects/{asset.project_id}/assets/{asset.id}/file",
+        created_at=asset.created_at.isoformat() if hasattr(asset.created_at, "isoformat") else str(asset.created_at),
+    )
+
+
+@router.get("/{project_id}/assets", response_model=List[MediaAssetResponse])
+async def list_media_assets(project_id: str, db: AsyncSession = Depends(get_db)):
+    """List all staged B-roll visual assets for a project."""
+    await _get_project_or_404(db, project_id)
+    stmt = select(MediaAsset).where(MediaAsset.project_id == project_id).order_by(MediaAsset.shot_number)
+    assets = (await db.execute(stmt)).scalars().all()
+    return [_to_asset_response(a) for a in assets]
+
+
+@router.post("/{project_id}/assets", response_model=MediaAssetResponse)
+async def upload_media_asset(
+    project_id: str,
+    shot_number: int = Form(...),
+    file: UploadFile = File(...),
+    caption: Optional[str] = Form(None),
+    source_credit: Optional[str] = Form(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload and stage a B-roll image for a specific shot number."""
+    project = await _get_project_or_404(db, project_id)
+    content_type = (file.content_type or "application/octet-stream").lower()
+    allowed_types = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
+    if content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file type '{content_type}'. Supported formats: JPEG, PNG, WebP.",
+        )
+
+    body = await file.read()
+    if not body:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
+
+    width, height = None, None
+    try:
+        from PIL import Image
+        import io
+        with Image.open(io.BytesIO(body)) as img:
+            width, height = img.size
+    except Exception:
+        pass
+
+    proj_dir = UPLOAD_DIR / project_id
+    proj_dir.mkdir(parents=True, exist_ok=True)
+    asset_id = f"ast_{uuid.uuid4().hex[:12]}"
+    clean_filename = re.sub(r"[^a-zA-Z0-9_.-]", "_", file.filename or "broll.png")
+    disk_path = proj_dir / f"{asset_id}_{clean_filename}"
+    disk_path.write_bytes(body)
+
+    # Replace existing staged asset for this shot if one exists
+    existing_stmt = select(MediaAsset).where(MediaAsset.project_id == project_id, MediaAsset.shot_number == shot_number)
+    existing = (await db.execute(existing_stmt)).scalar_one_or_none()
+    if existing:
+        try:
+            old_path = Path(existing.file_path)
+            if old_path.exists():
+                old_path.unlink()
+        except Exception:
+            pass
+        await db.delete(existing)
+
+    asset = MediaAsset(
+        id=asset_id,
+        project_id=project_id,
+        shot_number=shot_number,
+        filename=clean_filename,
+        content_type=content_type,
+        file_size=len(body),
+        file_path=str(disk_path.resolve()),
+        caption=caption.strip() if caption else None,
+        source_credit=source_credit.strip() if source_credit else None,
+        width=width,
+        height=height,
+    )
+    db.add(asset)
+    await db.commit()
+    await db.refresh(asset)
+    return _to_asset_response(asset)
+
+
+@router.get("/{project_id}/assets/{asset_id}/file")
+async def get_media_asset_file(project_id: str, asset_id: str, db: AsyncSession = Depends(get_db)):
+    """Serve the raw media file for an asset."""
+    stmt = select(MediaAsset).where(MediaAsset.id == asset_id, MediaAsset.project_id == project_id)
+    asset = (await db.execute(stmt)).scalar_one_or_none()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found.")
+    path = Path(asset.file_path)
+    if not path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset file missing on server.")
+    return FileResponse(path, media_type=asset.content_type, filename=asset.filename)
+
+
+@router.delete("/{project_id}/assets/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_media_asset(project_id: str, asset_id: str, db: AsyncSession = Depends(get_db)):
+    """Delete a staged B-roll asset and remove its file from disk."""
+    stmt = select(MediaAsset).where(MediaAsset.id == asset_id, MediaAsset.project_id == project_id)
+    asset = (await db.execute(stmt)).scalar_one_or_none()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found.")
+    try:
+        path = Path(asset.file_path)
+        if path.exists():
+            path.unlink()
+    except Exception:
+        pass
+    await db.delete(asset)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
 
 
