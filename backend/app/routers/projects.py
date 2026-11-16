@@ -6,7 +6,7 @@ import uuid
 from typing import List, Optional
 from datetime import datetime, timezone
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form
+from fastapi import APIRouter, Body, Depends, HTTPException, status, File, UploadFile, Form
 from fastapi.responses import PlainTextResponse, Response, FileResponse
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,7 +41,7 @@ from app.schemas.project import (
     MediaVerificationRequest,
     MediaVerificationResponse,
 )
-from app.services import gemini, scriptwriter, sourcefinder, verifier, multimedia, pdf_generator, production, render, nle_export
+from app.services import gemini, scriptwriter, sourcefinder, verifier, multimedia, pdf_generator, production, render, nle_export, geomap
 from app.services.clusterer import tokenize_title
 from app.services.fulltext import ensure_full_text, fetch_page_text, web_client
 from app.schemas.event import FactCheckResponse
@@ -1586,6 +1586,22 @@ async def upload_media_asset(
     if not body:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
 
+    return await _stage_asset(
+        db, project_id, shot_number, body, file.filename or "broll.png", content_type, caption, source_credit
+    )
+
+
+async def _stage_asset(
+    db: AsyncSession,
+    project_id: str,
+    shot_number: int,
+    body: bytes,
+    filename: str,
+    content_type: str,
+    caption: Optional[str],
+    source_credit: Optional[str],
+) -> MediaAssetResponse:
+    """Write an image to disk and attach it to a shot, replacing whatever was staged there."""
     width, height = None, None
     try:
         from PIL import Image
@@ -1598,7 +1614,7 @@ async def upload_media_asset(
     proj_dir = UPLOAD_DIR / project_id
     proj_dir.mkdir(parents=True, exist_ok=True)
     asset_id = f"ast_{uuid.uuid4().hex[:12]}"
-    clean_filename = re.sub(r"[^a-zA-Z0-9_.-]", "_", file.filename or "broll.png")
+    clean_filename = re.sub(r"[^a-zA-Z0-9_.-]", "_", filename)
     disk_path = proj_dir / f"{asset_id}_{clean_filename}"
     disk_path.write_bytes(body)
 
@@ -1631,6 +1647,30 @@ async def upload_media_asset(
     await db.commit()
     await db.refresh(asset)
     return _to_asset_response(asset)
+
+
+@router.post("/{project_id}/maps", response_model=MediaAssetResponse)
+async def generate_map_asset(
+    project_id: str,
+    shot_number: int = Body(..., embed=True, ge=1),
+    db: AsyncSession = Depends(get_db),
+):
+    """Render a locator map of the project's chokepoints and countries and stage it on a shot."""
+    project = await _get_project_or_404(db, project_id)
+    actors, chokepoints, _ = extract_entities_and_chokepoints(project.title)
+    if project.cluster_id:
+        cluster = (await db.execute(select(EventCluster).where(EventCluster.id == project.cluster_id))).scalar_one_or_none()
+        if cluster:
+            actors = sorted(set(actors + (cluster.key_actors or [])))
+            chokepoints = sorted(set(chokepoints + (cluster.chokepoints or [])))
+    try:
+        png = geomap.render_map(project.title, chokepoints, actors)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return await _stage_asset(
+        db, project_id, shot_number, png, f"map_shot{shot_number}.png", "image/png",
+        "Locator map", geomap.CREDIT,
+    )
 
 
 @router.get("/{project_id}/assets/{asset_id}/file")

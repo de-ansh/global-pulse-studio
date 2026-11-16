@@ -48,6 +48,7 @@ Global Pulse Studio transforms noisy international reporting into structured doc
    - Upload and attach custom visual assets (satellite passes, photos, charts) to individual beats directly in Story Studio.
    - Pillow compositor scales and overlays staged B-roll onto 1080p animatic video cards with documentary lower thirds and attribution credits.
    - Automatically links media file paths into FCPXML and Premiere Pro XML timeline exports for instant NLE relinking.
+   - One-click **locator map** per beat: a 1080p map of the story's detected chokepoints and countries (alliances are not plotted), drawn offline on a public-domain Natural Earth basemap and staged like any other B-roll.
 
 8. **Plug-and-Play Web Dashboard**:
    - Zero-dependency dark-mode dashboard served directly from the FastAPI application.

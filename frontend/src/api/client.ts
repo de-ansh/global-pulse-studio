@@ -464,6 +464,15 @@ export const api = {
     return handleResponse<MediaAsset>(res);
   },
 
+  async generateMap(projectId: string, shotNumber: number): Promise<MediaAsset> {
+    const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/maps`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shot_number: shotNumber }),
+    });
+    return handleResponse<MediaAsset>(res);
+  },
+
   async deleteAsset(projectId: string, assetId: string): Promise<void> {
     const res = await fetch(
       `${API_BASE}/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}`,
