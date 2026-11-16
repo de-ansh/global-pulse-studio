@@ -18,6 +18,7 @@ import {
   Image as ImageIcon,
   Upload,
   Trash2,
+  Map as MapIcon,
 } from 'lucide-react';
 import { SupportVerdict, VERDICT_STYLES } from './SupportVerdict';
 import { AI_DISABLED_HINT, useFeatures } from '../../features';
@@ -231,6 +232,19 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
       setPkg(updatedPkg);
     } catch (err: any) {
       setError(err.message || 'Failed to upload B-roll asset.');
+    } finally {
+      setUploadingShot(null);
+    }
+  };
+
+  const handleGenerateMap = async (shotNumber: number) => {
+    setUploadingShot(shotNumber);
+    setError(null);
+    try {
+      await api.generateMap(projectId, shotNumber);
+      setPkg(await api.getProductionPackage(projectId));
+    } catch (err: any) {
+      setError(err.message || 'Failed to generate map.');
     } finally {
       setUploadingShot(null);
     }
@@ -539,6 +553,16 @@ export const ScriptPanel: React.FC<ScriptPanelProps> = ({ projectId }) => {
                               onChange={(e) => handleUploadBroll(shot.shot_number, e)}
                             />
                           </label>
+                          <button
+                            type="button"
+                            onClick={() => handleGenerateMap(shot.shot_number)}
+                            disabled={uploadingShot !== null}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border transition bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700 disabled:opacity-50"
+                            title="Generate a locator map of this story's chokepoints and countries for this shot"
+                          >
+                            <MapIcon className="w-2.5 h-2.5" />
+                            <span>Map</span>
+                          </button>
                           {shot.media_asset && (
                             <button
                               type="button"
