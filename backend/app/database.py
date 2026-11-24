@@ -54,9 +54,44 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+def upgrade_schema(sync_conn) -> None:
+    """Add columns that models gained after the database was created.
+
+    ``create_all`` only creates missing tables, so an older database breaks on every query that touches a
+    new column. New columns are added nullable with their scalar default, which SQLite fills into old rows.
+    shortcut: additive columns only (no renames, type changes or drops); move to Alembic when one is needed.
+    """
+    from sqlalchemy import inspect, literal, text
+
+    insp = inspect(sync_conn)
+    added = set()
+    for table in Base.metadata.sorted_tables:
+        if not insp.has_table(table.name):
+            continue
+        have = {c["name"] for c in insp.get_columns(table.name)}
+        for col in table.columns:
+            if col.name in have:
+                continue
+            ddl = f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col.type.compile(sync_conn.dialect)}'
+            if col.default is not None and col.default.is_scalar:
+                default = literal(col.default.arg).compile(dialect=sync_conn.dialect, compile_kwargs={"literal_binds": True})
+                ddl += f" DEFAULT {default}"
+            sync_conn.execute(text(ddl))
+            added.add((table.name, col.name))
+
+    # The blanket default would mark state media as commercial wires and let it pass the readiness gate.
+    if ("sources", "governance_type") in added:
+        for seed in settings.DEFAULT_SEEDS:
+            sync_conn.execute(
+                text("UPDATE sources SET governance_type = :g WHERE id = :id"),
+                {"g": seed.get("governance_type", "commercial_wire"), "id": seed["id"]},
+            )
+
+
 async def init_db() -> None:
-    """Create all tables on application startup."""
+    """Create all tables on application startup, then add any columns older databases lack."""
     async with engine.begin() as conn:
         # Import models inside to ensure all metadata is registered
         import app.models  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(upgrade_schema)
